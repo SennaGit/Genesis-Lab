@@ -12,3 +12,4 @@ frontend/.next/
 .env.*
 
 *.log
+.genesis/

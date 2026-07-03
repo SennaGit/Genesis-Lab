@@ -1,0 +1,13 @@
+{
+  "name": "genesis-cli-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "genesis": "./bin/genesis.ts"
+  },
+  "scripts": {
+    "agent:test": "node --test tests/*.test.ts",
+    "agent:run": "node bin/genesis.ts"
+  }
+}

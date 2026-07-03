@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+NODE_EXE="${GENESIS_NODE:-node}"
+exec "$NODE_EXE" "$(dirname "$0")/genesis.ts" "$@"
