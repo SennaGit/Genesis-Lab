@@ -1,0 +1,323 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #18201c;
+  background: #f3f6f0;
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+.workspace-shell {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(420px, 1fr) minmax(300px, 340px);
+  min-height: 100vh;
+  background: #f3f6f0;
+}
+
+.workspace-shell__sidebar,
+.workspace-shell__evidence {
+  background: #fbfcf7;
+  padding: 20px;
+}
+
+.workspace-shell__sidebar {
+  border-right: 1px solid #dce4d7;
+}
+
+.workspace-shell__evidence {
+  border-left: 1px solid #dce4d7;
+  overflow: auto;
+}
+
+.workspace-shell__main {
+  display: grid;
+  grid-template-rows: auto 190px minmax(320px, 1fr);
+  gap: 16px;
+  min-width: 0;
+  padding: 20px;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.brand-lockup__icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfd9ca;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #226b5b;
+}
+
+.brand-lockup h1,
+.workspace-header h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.brand-lockup p,
+.workspace-header p,
+.muted-text {
+  margin: 4px 0 0;
+  color: #66736a;
+}
+
+.question-form {
+  display: grid;
+  gap: 12px;
+}
+
+.sidebar-section-gap {
+  height: 20px;
+}
+
+.question-form label {
+  display: grid;
+  gap: 8px;
+  color: #39433d;
+  font-weight: 700;
+}
+
+.question-form textarea {
+  min-height: 126px;
+  resize: vertical;
+  border: 1px solid #cfd9ca;
+  border-radius: 8px;
+  padding: 12px;
+  color: #18201c;
+  background: #ffffff;
+  line-height: 1.5;
+}
+
+.question-form textarea:focus {
+  outline: 2px solid rgba(34, 107, 91, 0.22);
+  outline-offset: 2px;
+}
+
+.button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.button--primary {
+  background: #226b5b;
+}
+
+.button--primary:not(:disabled):hover {
+  background: #185849;
+}
+
+.button--secondary {
+  background: #5f6c62;
+}
+
+.button--full {
+  width: 100%;
+}
+
+.panel {
+  border: 1px solid #dce4d7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.panel__body {
+  min-width: 0;
+}
+
+.panel--padded {
+  padding: 14px;
+}
+
+.panel--scroll {
+  overflow: auto;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.progress-text {
+  color: #66736a;
+  font-size: 14px;
+}
+
+.dag-list,
+.log-list,
+.evidence-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dag-node {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-left: 4px solid #b9c6b4;
+  border-radius: 6px;
+  background: #f6f8f4;
+}
+
+.dag-node strong {
+  overflow-wrap: anywhere;
+}
+
+.dag-node span {
+  color: #66736a;
+  font-size: 13px;
+}
+
+.dag-node--completed {
+  border-left-color: #226b5b;
+}
+
+.dag-node--running {
+  border-left-color: #b98521;
+}
+
+.dag-node--failed,
+.dag-node--error {
+  border-left-color: #ad3434;
+}
+
+.log-list {
+  max-height: 100%;
+}
+
+.log-line {
+  padding: 7px 0;
+  border-bottom: 1px solid #edf1e9;
+  color: #39433d;
+  line-height: 1.45;
+}
+
+.log-line:last-child {
+  border-bottom: 0;
+}
+
+.report-text {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #202a23;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.55;
+}
+
+.evidence-item {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #dce4d7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.evidence-item strong,
+.evidence-item span {
+  display: block;
+}
+
+.evidence-item span {
+  margin-top: 3px;
+  color: #66736a;
+  font-size: 13px;
+}
+
+.evidence-item p {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #dce4d7;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #ffffff;
+  color: #39433d;
+  font-size: 13px;
+}
+
+.empty-state {
+  color: #66736a;
+  line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+  .workspace-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-shell__sidebar,
+  .workspace-shell__evidence {
+    border: 0;
+    border-bottom: 1px solid #dce4d7;
+  }
+
+  .workspace-shell__main {
+    grid-template-rows: auto minmax(160px, auto) minmax(300px, auto);
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "0.1.0",
+  "source": "从 Vite 原型反向整理",
+  "page": "科研工作台",
+  "layout": "三栏工作台外壳",
+  "regions": [
+    {
+      "name": "侧边栏",
+      "components": [
+        { "type": "品牌区", "name": "Genesis 品牌" },
+        { "type": "文本域", "name": "研究问题" },
+        { "type": "按钮", "name": "启动运行", "variant": "主要" },
+        { "type": "面板", "name": "DAG 面板" }
+      ]
+    },
+    {
+      "name": "主区域",
+      "components": [
+        { "type": "页头", "name": "运行状态页头" },
+        { "type": "面板", "name": "执行日志" },
+        { "type": "面板", "name": "Markdown 报告" }
+      ]
+    },
+    {
+      "name": "证据区",
+      "components": [
+        { "type": "面板", "name": "证据面板" },
+        { "type": "卡片列表", "name": "证据项" }
+      ]
+    }
+  ],
+  "contracts": {
+    "button": "ButtonContract",
+    "panel": "PanelContract",
+    "workspaceShell": "WorkspaceShellContract",
+    "dagNode": "DagNodeContract",
+    "evidenceItem": "EvidenceItemContract"
+  }
+}
