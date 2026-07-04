@@ -1,0 +1,10 @@
+﻿{
+  "id": "paper_analysis",
+  "name": "Paper Analysis",
+  "description": "Analyze papers, claims, methods, limitations, and citation support.",
+  "triggers": ["paper", "citation", "doi", "pdf", "论文", "引用", "方法"],
+  "input_schema": {"type": "object", "properties": {"question": {"type": "string"}}},
+  "output_schema": {"type": "object", "properties": {"evidenceIds": {"type": "array"}}},
+  "required_tools": ["literature.local_search"],
+  "default_model_role": "executor"
+}

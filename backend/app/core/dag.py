@@ -1,11 +1,15 @@
-from typing import Dict, Iterable, List
+﻿from typing import Dict, Iterable, List
 
 from .models import DagNode, ResearchTask
 
 
 class DagEngine:
     def build(self, task: ResearchTask) -> List[DagNode]:
-        nodes = []
+        nodes: List[DagNode] = []
+        literature_skills = [item for item in task.requiredCapabilities if item in ("research_literature", "paper_analysis")]
+        if not literature_skills:
+            literature_skills = ["research_literature"]
+
         for sub_question in task.subQuestions:
             nodes.append(
                 DagNode(
@@ -15,6 +19,13 @@ class DagEngine:
                     requires=["literature-%s" % item for item in sub_question.requires],
                     agent="LiteratureAgent",
                     outputs={"question": sub_question.text},
+                    goal=sub_question.text,
+                    agentRole="executor",
+                    skillIds=literature_skills,
+                    toolNames=["literature.local_search", "mcp.call"],
+                    input={"question": sub_question.text, "domains": task.domains},
+                    maxAttempts=2,
+                    costEstimate={"modelRole": "executor"},
                 )
             )
 
@@ -28,6 +39,13 @@ class DagEngine:
                     requires=literature_ids,
                     agent="CodeAgent",
                     outputs={"goal": "生成轻量级可复现分析摘要。"},
+                    goal="生成轻量级可复现分析摘要。",
+                    agentRole="executor",
+                    skillIds=["experiment_design"],
+                    toolNames=["python.sandbox"],
+                    input={"domains": task.domains, "methods": task.methods},
+                    maxAttempts=1,
+                    costEstimate={"modelRole": "executor"},
                 )
             )
 
@@ -39,15 +57,27 @@ class DagEngine:
                 status="pending",
                 requires=synthesis_requires,
                 agent="SynthesisAgent",
+                goal="合成固定章节的 Genesis Lab 研究报告。",
+                agentRole="synthesizer",
+                skillIds=list(task.requiredCapabilities),
+                toolNames=[],
+                maxAttempts=1,
+                costEstimate={"modelRole": "synthesizer"},
             )
         )
         nodes.append(
             DagNode(
-                id="review-1",
+                id="critic-1",
                 type="self_review",
                 status="pending",
                 requires=["synthesis-1"],
                 agent="ReviewAgent",
+                goal="检查证据覆盖、逻辑一致性和是否需要重新规划。",
+                agentRole="critic",
+                skillIds=["research_literature"],
+                toolNames=[],
+                maxAttempts=1,
+                costEstimate={"modelRole": "critic"},
             )
         )
         self.validate(nodes)
@@ -65,7 +95,7 @@ class DagEngine:
         node_map: Dict[str, DagNode] = {node.id: node for node in nodes}
         temporary = set()
         permanent = set()
-        ordered = []
+        ordered: List[DagNode] = []
 
         def visit(node: DagNode) -> None:
             if node.id in permanent:
@@ -82,3 +112,4 @@ class DagEngine:
         for candidate in nodes:
             visit(candidate)
         return ordered
+

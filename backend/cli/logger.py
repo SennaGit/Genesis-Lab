@@ -7,10 +7,16 @@ class ConsoleLogger:
         self.stream = stream
 
     def section(self, title: str) -> None:
-        self.write("\n== %s ==" % title)
+        if title.startswith("["):
+            self.write("\n%s" % title)
+        else:
+            self.write("\n[%s]" % title)
 
     def line(self, text: str = "") -> None:
         self.write(text)
+
+    def log(self, message: str) -> None:
+        self.write(message)
 
     def json(self, value: Dict[str, Any]) -> None:
         self.write(json.dumps(value, ensure_ascii=False, indent=2))
@@ -24,6 +30,15 @@ class ConsoleLogger:
 
     def step_end(self, node: Any) -> None:
         self.write("[done]  %s status=%s attempts=%s" % (node.id, node.status, node.attempts))
+
+    def node_started(self, node: Any, trace: Any) -> None:
+        self.step_start(node)
+
+    def node_succeeded(self, node: Any, trace: Any) -> None:
+        self.write("[done]  %s trace=%s status=%s attempts=%s" % (node.id, trace.status, node.status, node.attempts))
+
+    def node_failed(self, node: Any, trace: Any) -> None:
+        self.write("[fail]  %s trace=%s error=%s" % (node.id, trace.status, trace.error))
 
     def evidence(self, items: Iterable[Any]) -> None:
         for item in items:
@@ -70,4 +85,3 @@ def append_node(lines: List[str], by_id: Dict[str, Any], node: Any, prefix: str,
     children = [by_id[item] for item in node.requires if item in by_id]
     for index, child in enumerate(children):
         append_node(lines, by_id, child, child_prefix, index == len(children) - 1, next_seen)
-

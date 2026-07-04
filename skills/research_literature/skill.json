@@ -1,0 +1,10 @@
+﻿{
+  "id": "research_literature",
+  "name": "Research Literature",
+  "description": "Search and summarize literature-grade evidence for a research question.",
+  "triggers": ["literature", "paper", "research", "review", "文献", "论文", "检索", "研究"],
+  "input_schema": {"type": "object", "properties": {"question": {"type": "string"}}},
+  "output_schema": {"type": "object", "properties": {"evidenceIds": {"type": "array"}}},
+  "required_tools": ["literature.local_search", "mcp.call"],
+  "default_model_role": "executor"
+}

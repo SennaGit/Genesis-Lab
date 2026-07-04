@@ -12,12 +12,12 @@ def register(subparsers: _SubParsersAction) -> None:
 
 def handle(args: Any) -> int:
     context = create_cli_context()
-    snapshot = context.persistence.load_run(args.runId)
+    snapshot = context.store.getRun(args.runId)
     run = snapshot["run"]
     nodes: List[Dict[str, Any]] = run.get("dag") or []
     evidence = snapshot.get("evidence") or []
 
-    context.logger.section("Run Status")
+    context.logger.section("STATUS")
     context.logger.line("runId: %s" % run.get("id"))
     context.logger.line("status: %s" % run.get("status"))
     context.logger.line("question: %s" % run.get("question"))
@@ -31,6 +31,13 @@ def handle(args: Any) -> int:
         context.logger.line(
             "- %s [%s] status=%s agent=%s"
             % (node.get("id"), node.get("type"), node.get("status"), node.get("agent"))
+        )
+
+    context.logger.section("TRACE")
+    for item in run.get("trace") or []:
+        context.logger.line(
+            "- %s status=%s logs=%s"
+            % (item.get("nodeId"), item.get("status"), len(item.get("logs") or []))
         )
 
     context.logger.section("Logs")

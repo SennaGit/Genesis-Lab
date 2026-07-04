@@ -1,0 +1,10 @@
+﻿{
+  "id": "experiment_design",
+  "name": "Experiment Design",
+  "description": "Design reproducible experiments, checks, and analysis artifacts.",
+  "triggers": ["experiment", "analysis", "simulate", "python", "实验", "分析", "仿真"],
+  "input_schema": {"type": "object", "properties": {"question": {"type": "string"}}},
+  "output_schema": {"type": "object", "properties": {"artifacts": {"type": "array"}}},
+  "required_tools": ["python.sandbox"],
+  "default_model_role": "executor"
+}

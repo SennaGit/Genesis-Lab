@@ -8,6 +8,7 @@ except ImportError:  # pragma: no cover - keeps core importable without optional
     HTTPException = Exception
     BaseModel = object
 
+from .core.execution import create_execution_context
 from .core.runtime import GenesisRuntime
 
 
@@ -56,7 +57,13 @@ if FastAPI is not None:
     @app.post("/api/runs")
     def create_run(payload: CompileRequest):
         try:
-            run = runtime.create_run(payload.question)
+            task = runtime.compile(payload.question)
+            context = create_execution_context(
+                "api",
+                store=runtime.persistence_store,
+                provider=runtime.provider,
+            )
+            run = runtime.execute(task, context)
             return {"runId": run.id, "status": run.status}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))

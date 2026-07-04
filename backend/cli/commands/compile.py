@@ -17,9 +17,10 @@ def handle(args: Any) -> int:
     adapter = CliRuntimeAdapter(context)
     result = adapter.compile(question)
 
-    context.logger.section("ResearchTask")
+    context.logger.section("COMPILE")
+    context.logger.line("ResearchTask")
     context.logger.json(result["task"].to_dict())
-    context.logger.section("DAG")
+    context.logger.section(" DAG ")
     context.logger.dag(result["dag"])
     return 0
 

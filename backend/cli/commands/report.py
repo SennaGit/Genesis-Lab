@@ -14,7 +14,7 @@ def register(subparsers: _SubParsersAction) -> None:
 
 def handle(args: Any) -> int:
     context = create_cli_context()
-    snapshot = context.persistence.load_run(args.runId)
+    snapshot = context.store.getRun(args.runId)
     markdown = snapshot.get("markdown") or ""
     markdown_path = snapshot.get("markdownPath") or ""
 
