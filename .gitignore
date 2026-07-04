@@ -13,3 +13,7 @@ frontend/.next/
 
 *.log
 .genesis/
+website/node_modules/
+website/.next/
+website/.pnpm-store/
+.pnpm-store/

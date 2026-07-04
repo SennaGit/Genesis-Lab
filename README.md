@@ -131,8 +131,10 @@ pnpm run dev
 运行后端测试：
 
 ```bash
-cd backend
-python -m unittest discover -s tests
+# 在仓库根目录执行
+python -m unittest discover -s backend/tests
+python -m backend.cli.main compile "why does quantum entanglement not violate relativity"
+GENESIS_PYTHON=python node bin/genesis.ts run "why does quantum entanglement not violate relativity"
 ```
 
 运行前端检查：

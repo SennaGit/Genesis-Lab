@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 225 58% 4%;
+  --foreground: 210 40% 96%;
+  --card: 224 45% 8%;
+  --card-foreground: 210 40% 96%;
+  --primary: 192 100% 61%;
+  --primary-foreground: 224 63% 7%;
+  --secondary: 253 84% 75%;
+  --secondary-foreground: 224 63% 7%;
+  --muted: 223 34% 13%;
+  --muted-foreground: 218 16% 70%;
+  --accent: 164 72% 65%;
+  --accent-foreground: 224 63% 7%;
+  --destructive: 0 80% 62%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 220 34% 18%;
+  --input: 220 34% 18%;
+  --ring: 192 100% 61%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: #050812;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    linear-gradient(rgba(56, 213, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167, 139, 250, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at top left, rgba(56, 213, 255, 0.13), transparent 30rem),
+    linear-gradient(180deg, #050812 0%, #08111f 48%, #050812 100%);
+  background-size: 42px 42px, 42px 42px, 100% 100%, 100% 100%;
+  color: hsl(var(--foreground));
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(56, 213, 255, 0.28);
+  color: #ffffff;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

@@ -38,14 +38,18 @@ test("CLI config set api_key 写入 ~/.genesis/config.json", async () => {
   }
 });
 
-test("CLI run 调用 Agent Runtime 并输出结果", async () => {
+test("CLI run invokes research runtime and prints workflow output", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-cli-run-"));
   const genesisHome = path.join(temp, ".genesis");
 
   try {
-    const result = runGenesis(["run", "列出当前目录文件"], genesisHome);
+    const result = runGenesis(["run", "why does quantum entanglement not violate relativity"], genesisHome);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /已根据工具观察完成任务/);
+    assert.match(result.stdout, /ResearchTask/);
+    assert.match(result.stdout, /DAG/);
+    assert.match(result.stdout, /Execution/);
+    assert.match(result.stdout, /Evidence/);
+    assert.match(result.stdout, /Markdown Report/);
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

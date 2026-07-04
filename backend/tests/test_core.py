@@ -1,9 +1,9 @@
 import unittest
 
-from app.core.compiler import ResearchCompiler
-from app.core.dag import DagEngine
-from app.core.models import DagNode
-from app.core.runtime import GenesisRuntime
+from backend.app.core.compiler import ResearchCompiler
+from backend.app.core.dag import DagEngine
+from backend.app.core.models import DagNode
+from backend.app.core.runtime import GenesisRuntime
 
 
 class CompilerTests(unittest.TestCase):

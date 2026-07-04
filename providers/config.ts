@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AgentResult, AgentState } from "../core/types.ts";
+import type { AgentResult, AgentState, Message, Observation, ToolCall } from "../core/types.ts";
 import type { ProviderConfig } from "./base.ts";
 
 export type GenesisConfig = ProviderConfig & {
@@ -55,26 +55,21 @@ export async function setConfigValue(key: string, value: string): Promise<Genesi
 export async function appendRun(result: AgentResult): Promise<void> {
   await fs.mkdir(genesisHome(), { recursive: true });
   const state = await loadMemoryState();
-  state.runs.push({
-    at: new Date().toISOString(),
-    output: result.output,
-    steps: result.steps,
-    trace: result.trace,
-    observations: result.observations
-  });
-  await fs.writeFile(memoryPath(), JSON.stringify(state, null, 2), "utf8");
+  state.runs.push(toPersistedRun(result));
+  await writeMemoryState(state);
 }
 
 export async function saveSessionState(sessionId: string, state: AgentState): Promise<void> {
   await fs.mkdir(genesisHome(), { recursive: true });
   const memory = await loadMemoryState();
-  memory.sessions[sessionId] = state;
-  await fs.writeFile(memoryPath(), JSON.stringify(memory, null, 2), "utf8");
+  memory.sessions[sessionId] = toPersistedSessionState(state);
+  await writeMemoryState(memory);
 }
 
 export async function loadSessionState(sessionId: string): Promise<AgentState | undefined> {
   const memory = await loadMemoryState();
-  return memory.sessions[sessionId];
+  const session = memory.sessions[sessionId];
+  return session ? toAgentState(session) : undefined;
 }
 
 function normalizeConfig(config: GenesisConfig): GenesisConfig {
@@ -94,14 +89,14 @@ function normalizeConfig(config: GenesisConfig): GenesisConfig {
 async function loadMemoryState(): Promise<MemoryState> {
   try {
     const raw = await fs.readFile(memoryPath(), "utf8");
-    const parsed = JSON.parse(raw) as MemoryState;
-    return {
-      runs: parsed.runs ?? [],
-      sessions: parsed.sessions ?? {}
-    };
+    return normalizeMemoryState(JSON.parse(raw));
   } catch {
     return { runs: [], sessions: {} };
   }
+}
+
+async function writeMemoryState(state: MemoryState): Promise<void> {
+  await fs.writeFile(memoryPath(), JSON.stringify(state, null, 2), "utf8");
 }
 
 function normalizeConfigKey(key: string): keyof GenesisConfig {
@@ -125,13 +120,124 @@ function normalizeConfigKey(key: string): keyof GenesisConfig {
 }
 
 type MemoryState = {
-  runs: Array<{
-    at: string;
-    output: string;
-    steps: number;
-    trace: unknown[];
-    observations: unknown[];
-  }>;
-  sessions: Record<string, AgentState>;
+  runs: PersistedRun[];
+  sessions: Record<string, PersistedSessionState>;
 };
 
+type PersistedRun = {
+  at: string;
+  output: string;
+  steps: number;
+  trace: unknown[];
+  observations: Observation[];
+};
+
+type PersistedSessionState = AgentState & {
+  trace: unknown[];
+};
+
+function normalizeMemoryState(value: unknown): MemoryState {
+  const record = isRecord(value) ? value : {};
+  const sessions = isRecord(record.sessions) ? record.sessions : {};
+
+  return {
+    runs: arrayValue<unknown>(record.runs).map(normalizeRun),
+    sessions: Object.fromEntries(
+      Object.entries(sessions).map(([sessionId, session]) => [
+        sessionId,
+        toPersistedSessionState(normalizeSessionState(session))
+      ])
+    )
+  };
+}
+
+function normalizeRun(value: unknown): PersistedRun {
+  const record = isRecord(value) ? value : {};
+  const observations = arrayValue<Observation>(record.observations);
+  const trace = Array.isArray(record.trace)
+    ? record.trace
+    : [...arrayValue<ToolCall>(record.toolTrace), ...observations];
+
+  return {
+    at: typeof record.at === "string" ? record.at : "",
+    output: typeof record.output === "string" ? record.output : "",
+    steps: typeof record.steps === "number" ? record.steps : 0,
+    trace,
+    observations
+  };
+}
+
+function toPersistedRun(result: AgentResult): PersistedRun {
+  return {
+    at: new Date().toISOString(),
+    output: result.output,
+    steps: result.steps,
+    trace: result.trace,
+    observations: result.observations
+  };
+}
+
+function normalizeSessionState(value: unknown): AgentState {
+  const record = isRecord(value) ? value : {};
+  const trace = arrayValue<unknown>(record.trace);
+  const toolCalls = firstArrayValue<ToolCall>(record.toolCalls, record.toolTrace) ?? toolCallsFromTrace(trace);
+  const observations = Array.isArray(record.observations)
+    ? arrayValue<Observation>(record.observations)
+    : observationsFromTrace(trace);
+
+  return {
+    messages: arrayValue<Message>(record.messages),
+    scratchpad: typeof record.scratchpad === "string" ? record.scratchpad : "",
+    toolCalls,
+    observations,
+    final: typeof record.final === "string" ? record.final : undefined,
+    done: typeof record.done === "boolean" ? record.done : false,
+    steps: typeof record.steps === "number" ? record.steps : 0
+  };
+}
+
+function toPersistedSessionState(state: AgentState): PersistedSessionState {
+  const normalized = normalizeSessionState(state);
+  return {
+    ...normalized,
+    trace: [...normalized.toolCalls, ...normalized.observations]
+  };
+}
+
+function toAgentState(state: PersistedSessionState): AgentState {
+  const { trace: _trace, ...agentState } = state;
+  return agentState;
+}
+
+function firstArrayValue<T>(...values: unknown[]): T[] | undefined {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      return value as T[];
+    }
+  }
+  return undefined;
+}
+
+function arrayValue<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function toolCallsFromTrace(trace: unknown[]): ToolCall[] {
+  return trace.filter(isToolCall);
+}
+
+function observationsFromTrace(trace: unknown[]): Observation[] {
+  return trace.filter(isObservation);
+}
+
+function isToolCall(value: unknown): value is ToolCall {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string";
+}
+
+function isObservation(value: unknown): value is Observation {
+  return isRecord(value) && typeof value.toolCallId === "string" && typeof value.toolName === "string";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

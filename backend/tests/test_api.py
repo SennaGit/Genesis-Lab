@@ -5,7 +5,7 @@ try:
 except ImportError:  # pragma: no cover
     TestClient = None
 
-from app.main import app
+from backend.app.main import app
 
 
 @unittest.skipIf(TestClient is None or app is None, "FastAPI test dependencies are not installed")

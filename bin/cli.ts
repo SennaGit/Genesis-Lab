@@ -1,10 +1,15 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { GenesisAgent } from "../core/agent.ts";
 import { createInitialState } from "../core/state.ts";
 import { appendRun, configPath, loadConfig, loadSessionState, saveSessionState, setConfigValue } from "../providers/config.ts";
 import { createProvider } from "../providers/index.ts";
 import { createDefaultToolRegistry } from "../tools/index.ts";
+
+const PYTHON_CLI_MODULE = "backend.cli.main";
 
 export async function runCli(argv = process.argv.slice(2)): Promise<void> {
   const [command, ...rest] = argv;
@@ -34,16 +39,47 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
     return;
   }
 
-  if (command === "run" || command === "agent") {
+  if (command === "run" || command === "compile" || command === "status" || command === "report") {
+    runResearchCli([command, ...rest]);
+    return;
+  }
+
+  if (command === "agent") {
     const task = rest.join(" ").trim();
     if (!task) {
-      throw new Error(`genesis ${command} 需要任务文本。`);
+      throw new Error(`genesis ${command} requires task text.`);
     }
-    await runAgentTask(task, command === "agent");
+    await runAgentTask(task, true);
     return;
   }
 
   throw new Error(`未知命令：${command}`);
+}
+
+function runResearchCli(args: string[]): void {
+  const python = process.env.GENESIS_PYTHON || "python";
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const pythonPath = [repoRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+  const result = spawnSync(python, ["-m", PYTHON_CLI_MODULE, ...args], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PYTHONPATH: pythonPath,
+      PYTHONUTF8: "1",
+      PYTHONIOENCODING: "utf-8"
+    },
+    stdio: "inherit"
+  });
+
+  if (result.error) {
+    throw new Error(`Unable to start Python CLI: ${result.error.message}`);
+  }
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exitCode = result.status;
+  }
+  if (result.signal) {
+    throw new Error(`Python CLI terminated by signal ${result.signal}`);
+  }
 }
 
 async function runAgentTask(task: string, showTrace: boolean): Promise<void> {
@@ -185,7 +221,10 @@ function printHelp(): void {
 
 用法：
   genesis chat
-  genesis run "任务"
+  genesis run "research question"
+  genesis compile "research question"
+  genesis status <runId>
+  genesis report <runId>
   genesis agent "任务"
   genesis tools list
   genesis tool call <工具名> '<JSON参数>'
