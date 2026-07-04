@@ -1,35 +1,48 @@
-import type { Message } from "../core/types.ts";
-import type { ToolCall, Tool } from "../tools/types.ts";
+import type { ChatInput, ChatOutput, LLMClient } from "../core/types.ts";
 
-export type ProviderName = "local" | "openai" | "anthropic" | "openai-compatible";
+export type { ChatInput, ChatOutput } from "../core/types.ts";
+
+export type ProviderName = "openai" | "anthropic" | "custom" | "mock";
+export type LegacyProviderName = "local" | "openai-compatible";
+export type SupportedProviderName = ProviderName | LegacyProviderName;
 
 export type ProviderConfig = {
-  provider: ProviderName;
+  provider: SupportedProviderName;
+  apiKey?: string;
+  baseURL?: string;
+  model: string;
   api_key?: string;
   base_url?: string;
-  model?: string;
   max_steps?: number;
 };
 
-export type ChatInput = {
-  messages: Message[];
-  tools?: Tool[];
-  model?: string;
-};
-
-export type ChatOutput = {
-  content: string;
-  toolCalls?: ToolCall[];
-};
-
-export interface LLMProvider {
-  readonly name: ProviderName;
+export interface LLMProvider extends LLMClient {
+  readonly name: SupportedProviderName;
   chat(input: ChatInput): Promise<ChatOutput>;
 }
 
+export function getApiKey(config: ProviderConfig): string | undefined {
+  return config.apiKey ?? config.api_key;
+}
+
+export function getBaseURL(config: ProviderConfig): string | undefined {
+  return config.baseURL ?? config.base_url;
+}
+
 export function requireApiKey(config: ProviderConfig): string {
-  if (!config.api_key) {
-    throw new Error("缺少 API Key。请先运行 genesis config set api_key <你的密钥>。");
+  const apiKey = getApiKey(config);
+  if (!apiKey) {
+    throw new Error("缺少 API Key。请先配置 apiKey，或运行 genesis config set apiKey <你的密钥>。");
   }
-  return config.api_key;
+  return apiKey;
+}
+
+export function normalizeProviderName(provider: SupportedProviderName): ProviderName {
+  if (provider === "local") {
+    return "mock";
+  }
+  if (provider === "openai-compatible") {
+    return "custom";
+  }
+  return provider;
 }

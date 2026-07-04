@@ -201,6 +201,66 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 
 项目当前使用内存存储运行记录和证据。服务重启后，运行状态、证据和报告不会持久保留。
 
+### LLM Provider
+
+Genesis CLI/Agent Runtime 通过 `/providers` 提供统一模型接口，core runtime 只依赖 `LLMProvider` 抽象，不直接绑定 OpenAI、Anthropic 或任何具体网关。
+
+核心文件：
+
+```text
+providers/
+  base.ts                 # LLMProvider、ProviderConfig 和通用类型
+  openai.ts               # OpenAI Provider 导出
+  openai_compatible.ts    # OpenAI-compatible / custom endpoint 实现
+  anthropic.ts            # Anthropic Claude API 实现
+  mock.ts                 # 本地测试 Provider，不访问网络
+  config.ts               # ~/.genesis/config.json 配置读写
+  index.ts                # createProvider 工厂
+```
+
+统一接口：
+
+```ts
+interface LLMProvider {
+  chat(input: {
+    messages: any[];
+    tools?: any[];
+    model?: string;
+  }): Promise<{
+    content: string;
+    toolCalls?: any[];
+  }>;
+}
+```
+
+配置文件默认位于 `~/.genesis/config.json`，也可以用 `GENESIS_HOME` 指向其他目录。配置示例：
+
+```json
+{
+  "provider": "custom",
+  "apiKey": "",
+  "baseURL": "https://example.com/v1",
+  "model": "gpt-4.1"
+}
+```
+
+支持的 provider：
+
+- `mock`：默认离线 provider，用于本地测试 agent loop 和 tool calling。
+- `openai`：OpenAI Chat Completions API。
+- `anthropic`：Anthropic Messages API。
+- `custom`：OpenAI-compatible endpoint，适合自建 LLM gateway、代理服务或兼容 OpenAI schema 的模型服务。
+
+CLI 配置示例：
+
+```bash
+genesis config set provider custom
+genesis config set baseURL https://example.com/v1
+genesis config set apiKey <你的密钥>
+genesis config set model gpt-4.1
+genesis config show
+```
+
 ## 9. 依赖
 
 后端主要依赖：
@@ -252,3 +312,81 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 不确定组件：
 
 - `frontend/codex/`、`frontend/mcp/` 和 `frontend/stitch/` 更像实验性工程上下文，当前 README 不将其描述为稳定公开 API。
+
+## 12. Tool System
+
+Genesis 现在包含统一 Tool System，用于同时管理 local tools 和 MCP tools。
+
+核心文件：
+
+```text
+tools/
+  types.ts          # Tool、ToolCall、ToolResult、JSON Schema 类型
+  registry.ts       # 工具注册中心，负责校验和查找工具
+  router.ts         # ToolRouter，按 tool name dispatch
+  mcp_adapter.ts    # MCP stdio forwarding 兼容层
+  filesystem.ts     # 本地文件工具，例如 filesystem.read
+  network.ts        # 网络工具
+  design/           # Stitch / Figma / UI generator 工具化封装
+  index.ts          # 默认 registry/router 工厂
+```
+
+统一工具接口：
+
+```ts
+interface Tool {
+  name: string;
+  description: string;
+  inputSchema: object;
+  run(input: unknown): Promise<unknown>;
+}
+```
+
+默认工具包括：
+
+- `echo`：回显输入。
+- `filesystem.read`：读取当前工作目录内的文本文件。
+- `list_files`：列出当前工作目录内文件。
+- `read_file`：兼容旧名称的文件读取工具。
+- `write_file`：写入当前工作目录内文本文件。
+- `http_get`：执行 HTTP GET。
+- `mcp.forward`：转发调用到 stdio MCP server。
+- `mcp_call`：兼容旧版 MCP 调用格式。
+- `design.generate_ui`：生成 headless UI 规格，UI 只作为 tool output。
+- `figma.export_nodes`：将 Figma file/node 输入标准化为导出请求。
+- `stitch.transform_layout`：把 Stitch layout JSON 转换为结构化布局规格。
+
+
+### UI 能力工具化依赖关系
+
+UI、Stitch 和 Figma 相关能力已经从核心执行链路中剥离，只能作为 Tool 被调用。core/agent 不导入前端、不导入 Stitch、不导入 Figma；CLI 在没有 UI 的环境中仍可运行。
+
+```mermaid
+flowchart TD
+  CLI["CLI"] --> Agent["Agent Runtime"]
+  Agent --> Router["ToolRouter"]
+  Router --> DesignTool["design.generate_ui"]
+  Router --> FigmaTool["figma.export_nodes"]
+  Router --> StitchTool["stitch.transform_layout"]
+  DesignTool --> UISpec["结构化 UI 规格"]
+  FigmaTool --> ExportSpec["Figma 导出请求"]
+  StitchTool --> LayoutSpec["Stitch 布局规格"]
+  UISpec -.可选实现.-> Frontend["frontend/*"]
+  ExportSpec -.可选实现.-> Frontend
+  LayoutSpec -.可选实现.-> Frontend
+```
+
+Agent Runtime 可以通过 `ToolRouter` 调用工具：
+
+```ts
+import { GenesisAgent } from "./core/agent.ts";
+import { MockProvider } from "./providers/mock.ts";
+import { createDefaultToolRegistry, ToolRouter } from "./tools/index.ts";
+
+const registry = createDefaultToolRegistry(process.cwd());
+const router = new ToolRouter(registry);
+const agent = new GenesisAgent(new MockProvider(), registry, { dispatcher: router });
+
+const result = await agent.run("列出当前目录文件");
+console.log(result.output);
+```

@@ -1,21 +1,24 @@
 import type { LLMProvider, ProviderConfig } from "./base.ts";
+import { normalizeProviderName } from "./base.ts";
 import { AnthropicProvider } from "./anthropic.ts";
-import { LocalProvider } from "./local.ts";
+import { MockProvider } from "./mock.ts";
 import { OpenAIProvider } from "./openai.ts";
 import { OpenAICompatibleProvider } from "./openai_compatible.ts";
 
 export function createProvider(config: ProviderConfig): LLMProvider {
-  if (config.provider === "openai") {
+  const provider = normalizeProviderName(config.provider);
+
+  if (provider === "openai") {
     return new OpenAIProvider(config);
   }
 
-  if (config.provider === "anthropic") {
+  if (provider === "anthropic") {
     return new AnthropicProvider(config);
   }
 
-  if (config.provider === "openai-compatible") {
-    return new OpenAICompatibleProvider(config);
+  if (provider === "custom") {
+    return new OpenAICompatibleProvider(config, "custom");
   }
 
-  return new LocalProvider();
+  return new MockProvider();
 }

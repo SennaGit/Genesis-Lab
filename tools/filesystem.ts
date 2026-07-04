@@ -12,7 +12,8 @@ export function createFilesystemTools(root = process.cwd()): Tool[] {
         properties: {
           path: { type: "string", description: "相对路径，默认当前目录。" },
           maxDepth: { type: "number", description: "递归深度，默认 1。" }
-        }
+        },
+        additionalProperties: false
       },
       run: async (input) => {
         const value = asRecord(input);
@@ -21,22 +22,8 @@ export function createFilesystemTools(root = process.cwd()): Tool[] {
         return listFiles(target, root, maxDepth);
       }
     },
-    {
-      name: "read_file",
-      description: "读取当前工作目录内的文本文件。",
-      inputSchema: {
-        type: "object",
-        required: ["path"],
-        properties: {
-          path: { type: "string", description: "要读取的相对文件路径。" }
-        }
-      },
-      run: async (input) => {
-        const value = asRecord(input);
-        const target = resolveInsideRoot(root, String(value.path ?? ""));
-        return fs.readFile(target, "utf8");
-      }
-    },
+    createReadFileTool(root, "filesystem.read"),
+    createReadFileTool(root, "read_file"),
     {
       name: "write_file",
       description: "写入当前工作目录内的文本文件。",
@@ -46,7 +33,8 @@ export function createFilesystemTools(root = process.cwd()): Tool[] {
         properties: {
           path: { type: "string", description: "要写入的相对文件路径。" },
           content: { type: "string", description: "文件内容，默认语言应为中文。" }
-        }
+        },
+        additionalProperties: false
       },
       run: async (input) => {
         const value = asRecord(input);
@@ -57,6 +45,26 @@ export function createFilesystemTools(root = process.cwd()): Tool[] {
       }
     }
   ];
+}
+
+function createReadFileTool(root: string, name: string): Tool {
+  return {
+    name,
+    description: name === "filesystem.read" ? "读取当前工作目录内的文本文件。" : "读取当前工作目录内的文本文件（兼容旧名称）。",
+    inputSchema: {
+      type: "object",
+      required: ["path"],
+      properties: {
+        path: { type: "string", description: "要读取的相对文件路径。" }
+      },
+      additionalProperties: false
+    },
+    run: async (input) => {
+      const value = asRecord(input);
+      const target = resolveInsideRoot(root, String(value.path ?? ""));
+      return fs.readFile(target, "utf8");
+    }
+  };
 }
 
 async function listFiles(target: string, root: string, maxDepth: number, depth = 0): Promise<string[]> {

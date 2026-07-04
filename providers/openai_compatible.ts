@@ -1,18 +1,18 @@
-import type { ChatInput, ChatOutput, LLMProvider, ProviderConfig, ProviderName } from "./base.ts";
-import { requireApiKey } from "./base.ts";
-import type { Tool, ToolCall } from "../tools/types.ts";
+import type { ChatInput, ChatOutput, LLMProvider, ProviderConfig, SupportedProviderName } from "./base.ts";
+import { getBaseURL, requireApiKey } from "./base.ts";
+import type { Tool, ToolCall } from "../core/types.ts";
 
 export class OpenAICompatibleProvider implements LLMProvider {
-  readonly name: ProviderName;
+  readonly name: SupportedProviderName;
   private readonly config: ProviderConfig;
 
-  constructor(config: ProviderConfig, name: ProviderName = "openai-compatible") {
+  constructor(config: ProviderConfig, name: SupportedProviderName = "custom") {
     this.config = config;
     this.name = name;
   }
 
   async chat(input: ChatInput): Promise<ChatOutput> {
-    const baseURL = normalizeBaseURL(this.config.base_url ?? "https://api.openai.com/v1");
+    const baseURL = normalizeBaseURL(getBaseURL(this.config) ?? "https://api.openai.com/v1");
     const apiKey = requireApiKey(this.config);
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
@@ -21,7 +21,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: input.model ?? this.config.model ?? "gpt-4.1",
+        model: input.model ?? this.config.model,
         messages: input.messages.map((message) => ({
           role: message.role,
           content: message.content,
@@ -49,7 +49,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
 export class OpenAIProvider extends OpenAICompatibleProvider {
   constructor(config: ProviderConfig) {
-    super({ ...config, base_url: config.base_url ?? "https://api.openai.com/v1" }, "openai");
+    super({ ...config, baseURL: getBaseURL(config) ?? "https://api.openai.com/v1" }, "openai");
   }
 }
 

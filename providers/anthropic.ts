@@ -1,7 +1,6 @@
 import type { ChatInput, ChatOutput, LLMProvider, ProviderConfig } from "./base.ts";
-import { requireApiKey } from "./base.ts";
-import type { Tool, ToolCall } from "../tools/types.ts";
-import type { Message } from "../core/types.ts";
+import { getBaseURL, requireApiKey } from "./base.ts";
+import type { Message, Tool } from "../core/types.ts";
 
 export class AnthropicProvider implements LLMProvider {
   readonly name = "anthropic" as const;
@@ -12,7 +11,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async chat(input: ChatInput): Promise<ChatOutput> {
-    const baseURL = (this.config.base_url ?? "https://api.anthropic.com/v1").replace(/\/$/, "");
+    const baseURL = (getBaseURL(this.config) ?? "https://api.anthropic.com/v1").replace(/\/$/, "");
     const response = await fetch(`${baseURL}/messages`, {
       method: "POST",
       headers: {
@@ -21,7 +20,7 @@ export class AnthropicProvider implements LLMProvider {
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: input.model ?? this.config.model ?? "claude-sonnet-4-5",
+        model: input.model ?? this.config.model,
         max_tokens: 4096,
         system: systemPrompt(input.messages),
         messages: input.messages.filter((message) => message.role !== "system").map(toAnthropicMessage),

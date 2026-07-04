@@ -10,7 +10,8 @@ export function createNetworkTools(): Tool[] {
         required: ["url"],
         properties: {
           url: { type: "string", description: "请求 URL。" }
-        }
+        },
+        additionalProperties: false
       },
       run: async (input) => {
         const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
@@ -27,3 +28,4 @@ export function createNetworkTools(): Tool[] {
     }
   ];
 }
+

@@ -1,52 +1,46 @@
-﻿import type { LLMProvider } from "../providers/base.ts";
-import type { ToolRegistry } from "../tools/types.ts";
 import { DefaultAgentEngine } from "./engine.ts";
+import type { ToolDispatcher } from "./executor.ts";
 import { LLMPlanner } from "./planner.ts";
-import { appendRun } from "./state.ts";
-import type { Agent, AgentResult, AgentState } from "./types.ts";
-import { createInitialState } from "./types.ts";
+import { createInitialState } from "./state.ts";
+import type { Agent, AgentResult, AgentState, LLMClient, ToolRegistry } from "./types.ts";
+
+export type GenesisAgentOptions = {
+  model?: string;
+  maxSteps?: number;
+  dispatcher?: ToolDispatcher;
+};
 
 export class GenesisAgent implements Agent {
   private readonly engine: DefaultAgentEngine;
-  private readonly persist: boolean;
 
-  constructor(
-    provider: LLMProvider,
-    registry: ToolRegistry,
-    options: { model?: string; maxSteps?: number; persist?: boolean } = {}
-  ) {
-    this.persist = options.persist ?? true;
+  constructor(llm: LLMClient, registry: ToolRegistry, options: GenesisAgentOptions = {}) {
     this.engine = new DefaultAgentEngine(
-      new LLMPlanner(provider, options.model),
+      new LLMPlanner(llm, options.model),
       registry,
-      options.maxSteps ?? 6
+      options.maxSteps ?? 6,
+      options.dispatcher
     );
   }
 
-  async run(input: string, initialState?: AgentState): Promise<AgentResult> {
+  async run(task: string): Promise<AgentResult> {
+    return this.runWithState(task);
+  }
+
+  async runWithState(task: string, initialState?: AgentState): Promise<AgentResult> {
     let state = initialState ?? createInitialState();
-    state = await this.engine.step(state, input);
+    state = await this.engine.step(state, task);
 
     while (!state.done) {
       state = await this.engine.step(state);
     }
 
-    const result: AgentResult = {
+    return {
       output: state.final ?? "",
+      trace: [...state.toolCalls, ...state.observations],
       steps: state.steps,
       toolTrace: state.toolCalls,
       observations: state.observations,
       state
     };
-
-    if (this.persist) {
-      try {
-        await appendRun(result);
-      } catch (error) {
-        state.scratchpad += `\n状态持久化失败：${error instanceof Error ? error.message : String(error)}`;
-      }
-    }
-
-    return result;
   }
 }

@@ -1,29 +1,64 @@
-﻿import type { Observation } from "./types.ts";
-import type { ToolCall, ToolRegistry } from "../tools/types.ts";
+import type { Observation, ToolCall, ToolRegistry } from "./types.ts";
+
+export type ToolDispatchResult = {
+  ok: boolean;
+  output?: unknown;
+  error?: string;
+  toolName: string;
+  toolCallId?: string;
+};
+
+export type ToolDispatcher = {
+  dispatch(toolCall: ToolCall): Promise<ToolDispatchResult>;
+};
 
 export class ToolExecutor {
+  private readonly dispatcher: ToolDispatcher;
+
+  constructor(registryOrDispatcher: ToolRegistry | ToolDispatcher) {
+    this.dispatcher = isDispatcher(registryOrDispatcher)
+      ? registryOrDispatcher
+      : new RegistryDispatcher(registryOrDispatcher);
+  }
+
+  async execute(toolCall: ToolCall): Promise<Observation> {
+    const result = await this.dispatcher.dispatch(toolCall);
+    return {
+      toolCallId: result.toolCallId ?? toolCall.id,
+      toolName: result.toolName,
+      output: result.output ?? null,
+      error: result.ok ? undefined : result.error
+    };
+  }
+}
+
+class RegistryDispatcher implements ToolDispatcher {
   private readonly registry: ToolRegistry;
 
   constructor(registry: ToolRegistry) {
     this.registry = registry;
   }
 
-  async execute(toolCall: ToolCall): Promise<Observation> {
+  async dispatch(toolCall: ToolCall): Promise<ToolDispatchResult> {
     try {
       const tool = this.registry.get(toolCall.name);
-      const output = await tool.run(toolCall.input);
       return {
-        toolCallId: toolCall.id,
+        ok: true,
+        output: await tool.run(toolCall.input),
         toolName: toolCall.name,
-        output
+        toolCallId: toolCall.id
       };
     } catch (error) {
       return {
-        toolCallId: toolCall.id,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
         toolName: toolCall.name,
-        output: null,
-        error: error instanceof Error ? error.message : String(error)
+        toolCallId: toolCall.id
       };
     }
   }
+}
+
+function isDispatcher(value: ToolRegistry | ToolDispatcher): value is ToolDispatcher {
+  return typeof (value as ToolDispatcher).dispatch === "function";
 }
