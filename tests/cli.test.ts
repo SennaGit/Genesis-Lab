@@ -4,6 +4,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { deterministicResearchDAG } from "../genesis/core/runtime/planner.ts";
+import { SessionStore } from "../genesis/memory/session_store.ts";
 
 const cliEntry = path.resolve("bin", "genesis.ts");
 
@@ -110,7 +112,10 @@ test("CLI skills and MCP commands are TypeScript runtime commands", async () => 
     assert.equal(init.status, 0, init.stderr);
     await writeFile(
       path.join(genesisHome, "mcp.json"),
-      JSON.stringify({ tools: [{ name: "arxiv.search", type: "api", mock_output: { evidence: "ok", confidence: 0.8 } }] }, null, 2),
+      JSON.stringify({
+        tools: [{ name: "arxiv.search", type: "api", mock_output: { evidence: "ok", confidence: 0.8 } }],
+        servers: [{ name: "fixture", tools: [{ name: "echo", type: "api", mock_output: { evidence: "server ok", confidence: 0.8 } }] }]
+      }, null, 2),
       "utf8"
     );
 
@@ -130,11 +135,38 @@ test("CLI skills and MCP commands are TypeScript runtime commands", async () => 
     const mcpTest = runGenesis(["mcp", "test", "arxiv.search"], genesisHome);
     assert.equal(mcpTest.status, 0, mcpTest.stderr);
     assert.match(mcpTest.stdout, /"ok": true/);
+
+    const serverToolTest = runGenesis(["mcp", "test", "fixture", "echo"], genesisHome);
+    assert.equal(serverToolTest.status, 0, serverToolTest.stderr);
+    assert.match(serverToolTest.stdout, /server ok/);
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
 });
 
+
+test("CLI resume continues unfinished session by default", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-ts-resume-unfinished-"));
+  const genesisHome = path.join(temp, ".genesis");
+  const sessionId = "sess_cli_resume_unfinished";
+
+  try {
+    process.env.GENESIS_HOME = genesisHome;
+    const store = new SessionStore(genesisHome);
+    await store.init();
+    await store.createSession(sessionId, deterministicResearchDAG("resume unfinished idea"));
+
+    const result = runGenesis(["resume", sessionId], genesisHome);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /event=node_start/);
+    assert.match(result.stdout, /event=final_report/);
+    assert.match(result.stdout, /status: completed/);
+    assert.match(result.stdout, /# Genesis Research Report/);
+  } finally {
+    delete process.env.GENESIS_HOME;
+    await rm(temp, { recursive: true, force: true });
+  }
+});
 test("CLI chat accepts an active research idea", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-ts-chat-"));
   const genesisHome = path.join(temp, ".genesis");

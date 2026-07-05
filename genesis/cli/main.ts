@@ -101,13 +101,13 @@ async function handleChat(): Promise<void> {
 }
 
 async function handleResume(args: string[]): Promise<void> {
-  const continueRun = args.includes("--continue");
-  const sessionId = args.find((arg) => arg !== "--continue");
+  const inspectOnly = args.includes("--inspect");
+  const sessionId = args.find((arg) => arg !== "--continue" && arg !== "--inspect");
   if (!sessionId) {
-    throw new Error("Usage: genesis resume <session_id> [--continue]");
+    throw new Error("Usage: genesis resume <session_id> [--inspect]");
   }
   const runtime = new GenesisRuntime({ config: await loadRuntimeConfig() });
-  const session = await runtime.resume(sessionId, { continue: continueRun, onEvent: printRuntimeEvent });
+  const session = await runtime.resume(sessionId, { continue: !inspectOnly, onEvent: printRuntimeEvent });
   printSessionSummary(session);
   if (session.report) {
     console.log(session.report);
@@ -163,7 +163,7 @@ async function handleSkills(args: string[]): Promise<void> {
 }
 
 async function handleMCP(args: string[]): Promise<void> {
-  const [subcommand, toolName] = args;
+  const [subcommand, first, second] = args;
   const registry = MCPToolRegistry.fromConfigFile(mcpConfigPath());
   if (!subcommand || subcommand === "list") {
     for (const tool of registry.list()) {
@@ -172,8 +172,9 @@ async function handleMCP(args: string[]): Promise<void> {
     return;
   }
   if (subcommand === "test") {
+    const toolName = resolveMCPToolName(registry, first, second);
     if (!toolName) {
-      throw new Error("Usage: genesis mcp test <tool_name>");
+      throw new Error("Usage: genesis mcp test <tool_name> or genesis mcp test <server> <tool_name>");
     }
     const result = await registry.execute(toolName, { healthcheck: true });
     console.log(JSON.stringify(result, null, 2));
@@ -182,6 +183,16 @@ async function handleMCP(args: string[]): Promise<void> {
   throw new Error("Usage: genesis mcp list|test <tool_name>");
 }
 
+function resolveMCPToolName(registry: MCPToolRegistry, first?: string, second?: string): string | undefined {
+  if (!first) {
+    return undefined;
+  }
+  if (!second) {
+    return first;
+  }
+  const names = [`${first}.${second}`, `${first}/${second}`, second];
+  return names.find((name) => registry.has(name)) ?? `${first}.${second}`;
+}
 async function handleConfig(args: string[]): Promise<void> {
   const [subcommand, key, ...value] = args;
   if (!subcommand || subcommand === "show") {
@@ -269,13 +280,14 @@ Usage:
   genesis init
   genesis run "research idea"
   genesis chat
-  genesis resume <session_id> [--continue]
+  genesis resume <session_id> [--inspect]
   genesis status <session_id>
   genesis report <session_id> [--path]
   genesis skills list
   genesis skills inspect <skill_id>
   genesis mcp list
   genesis mcp test <tool_name>
+  genesis mcp test <server> <tool_name>
   genesis config show
   genesis config set provider openai
   genesis config set apiKey <key>

@@ -18,13 +18,14 @@ GitHub is only a capability provider through MCP-style tools. It does not define
 genesis init
 genesis run "quantum memory stability in LLMs"
 genesis chat
-genesis resume <session_id> [--continue]
+genesis resume <session_id> [--inspect]
 genesis status <session_id>
 genesis report <session_id> [--path]
 genesis skills list
 genesis skills inspect research_skill
 genesis mcp list
 genesis mcp test literature.search
+genesis mcp test <server> <tool_name>
 genesis config show
 genesis doctor
 ```
