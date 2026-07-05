@@ -1,5 +1,5 @@
 import type { ChatInput, ChatOutput, LLMProvider, ProviderConfig, SupportedProviderName } from "./base.ts";
-import { getBaseURL, requireApiKey } from "./base.ts";
+import { getApiKey, getBaseURL, requireApiKey } from "./base.ts";
 import type { Tool, ToolCall } from "../core/types.ts";
 
 export class OpenAICompatibleProvider implements LLMProvider {
@@ -13,13 +13,15 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
   async chat(input: ChatInput): Promise<ChatOutput> {
     const baseURL = normalizeBaseURL(getBaseURL(this.config) ?? "https://api.openai.com/v1");
-    const apiKey = requireApiKey(this.config);
+    const apiKey = this.name === "local" ? getApiKey(this.config) : requireApiKey(this.config);
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
+      headers,
       body: JSON.stringify({
         model: input.model ?? this.config.model,
         messages: input.messages.map((message) => ({
@@ -35,7 +37,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`模型请求失败：HTTP ${response.status} ${await response.text()}`);
+      throw new Error(`Model request failed: HTTP ${response.status} ${await response.text()}`);
     }
 
     const payload = await response.json() as OpenAIChatResponse;

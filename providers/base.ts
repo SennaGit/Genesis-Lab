@@ -32,7 +32,7 @@ export function getBaseURL(config: ProviderConfig): string | undefined {
 export function requireApiKey(config: ProviderConfig): string {
   const apiKey = getApiKey(config);
   if (!apiKey) {
-    throw new Error("缺少 API Key。请先配置 apiKey，或运行 genesis config set apiKey <你的密钥>。");
+    throw new Error("Missing API key. Run genesis config set apiKey <your-key> first.");
   }
   return apiKey;
 }

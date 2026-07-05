@@ -29,7 +29,7 @@ export class AnthropicProvider implements LLMProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`模型请求失败：HTTP ${response.status} ${await response.text()}`);
+      throw new Error(`Model request failed: HTTP ${response.status} ${await response.text()}`);
     }
 
     const payload = await response.json() as AnthropicResponse;
@@ -88,3 +88,4 @@ type AnthropicResponse = {
     input?: unknown;
   }>;
 };
+

@@ -10,5 +10,5 @@
     "typeRoots": ["./frontend/node_modules/@types"],
     "skipLibCheck": true
   },
-  "include": ["bin/**/*.ts", "core/**/*.ts", "providers/**/*.ts", "tools/**/*.ts", "tests/**/*.ts"]
+  "include": ["bin/**/*.ts", "core/**/*.ts", "providers/**/*.ts", "tools/**/*.ts", "genesis/**/*.ts", "tests/**/*.ts"]
 }
