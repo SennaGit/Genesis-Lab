@@ -87,16 +87,23 @@ export function parseResearchDAG(content: string): ResearchDAG {
 }
 
 export function deterministicResearchDAG(idea: string, selectedSkills: string[] = ["research_skill"]): ResearchDAG {
-  const lower = idea.toLowerCase();
-  const needsCode = /code|repo|github|pr|commit|bug|debug|ci|代码|仓库|调试/.test(lower);
-  const needsExperiment = /experiment|simulate|analysis|dataset|实验|仿真|分析|数据/.test(lower);
-  const evidenceTools = needsCode ? ["github.repo_exploration", "github.code_understanding"] : ["literature.search", "browser.validate"];
-  const experimentTools = needsExperiment ? ["runtime.python", "dataset.lookup"] : ["literature.search"];
+  const profile = capabilityProfile(idea);
   const skillNames = selectedSkills.length ? selectedSkills : ["research_skill"];
+  const evidenceTools = uniqueTools([
+    ...(profile.needsLiterature ? ["literature.search"] : []),
+    ...(profile.needsExternalValidation ? ["browser.validate"] : []),
+    ...(profile.needsCode ? ["github.repo_exploration", "github.code_understanding"] : []),
+    ...(profile.needsCIDiagnosis ? ["github.ci_diagnosis"] : [])
+  ]);
+  const analysisTools = uniqueTools([
+    ...(profile.needsRuntime ? ["runtime.python"] : []),
+    ...(profile.needsDataset ? ["dataset.lookup"] : []),
+    ...(!profile.needsRuntime && !profile.needsDataset ? ["browser.validate"] : [])
+  ]);
 
   return {
     idea,
-    goal: `研究并验证：${idea}`,
+    goal: `Research and validate: ${idea}`,
     research_graph: [
       {
         node_id: "n1",
@@ -112,24 +119,26 @@ export function deterministicResearchDAG(idea: string, selectedSkills: string[] 
       {
         node_id: "n2",
         type: "question",
-        instruction: "Collect source-grounded evidence relevant to the hypothesis.",
+        instruction: "Collect source-grounded evidence relevant to the hypothesis using the selected capabilities.",
         inputs: ["hypothesis"],
         outputs: ["evidence"],
         tools_required: evidenceTools,
-        skills_required: needsCode ? intersectOrFallback(skillNames, ["coding_skill", "debugging_skill", "research_skill"]) : intersectOrFallback(skillNames, ["research_skill", "paper_analysis_skill"]),
+        skills_required: skillsForEvidence(profile, skillNames),
         depends_on: ["n1"],
-        success_criteria: "At least one evidence item is linked to the hypothesis."
+        success_criteria: "At least one evidence item is linked to each major claim."
       },
       {
         node_id: "n3",
-        type: needsExperiment ? "experiment" : "analysis",
-        instruction: "Analyze evidence and run a lightweight validation path if useful.",
+        type: profile.needsRuntime || profile.needsDataset ? "experiment" : "analysis",
+        instruction: profile.needsRuntime || profile.needsDataset
+          ? "Run or specify a lightweight validation path using datasets, code, or simulations when available."
+          : "Analyze and cross-check the collected evidence for support, uncertainty, and contradictions.",
         inputs: ["hypothesis", "evidence"],
         outputs: ["analysis"],
-        tools_required: experimentTools,
-        skills_required: needsExperiment ? mergeSkillPolicy(skillNames, ["coding_skill", "research_skill"]) : intersectOrFallback(skillNames, ["research_skill", "paper_analysis_skill"]),
+        tools_required: analysisTools,
+        skills_required: skillsForAnalysis(profile, skillNames),
         depends_on: ["n2"],
-        success_criteria: "Analysis has confidence above threshold and records limitations."
+        success_criteria: "Analysis records confidence, limitations, and any reproducibility constraints."
       },
       {
         node_id: "n4",
@@ -152,6 +161,53 @@ export function deterministicResearchDAG(idea: string, selectedSkills: string[] 
       sections: defaultReportSections()
     }
   };
+}
+
+type CapabilityProfile = {
+  needsLiterature: boolean;
+  needsExternalValidation: boolean;
+  needsDataset: boolean;
+  needsRuntime: boolean;
+  needsCode: boolean;
+  needsCIDiagnosis: boolean;
+};
+
+function capabilityProfile(idea: string): CapabilityProfile {
+  const q = idea.toLowerCase();
+  const needsCode = /code|repo|github|pull request|\bpr\b|commit|diff|bug|debug|software|source/.test(q);
+  const needsCIDiagnosis = /\bci\b|build log|test failure|pipeline|workflow run|failing check|failed check/.test(q);
+  const needsDataset = /dataset|benchmark|cohort|table|corpus|data\b|clinical|biology|biomedical|sample/.test(q);
+  const needsRuntime = /experiment|simulate|simulation|python|runtime|ablation|statistical|statistics|calculate|compute|model eval/.test(q);
+  const needsLiterature = !needsCode || /paper|literature|citation|doi|arxiv|pubmed|study|review|method|theory|science|research/.test(q);
+  return {
+    needsLiterature,
+    needsExternalValidation: true,
+    needsDataset,
+    needsRuntime,
+    needsCode,
+    needsCIDiagnosis
+  };
+}
+
+function skillsForEvidence(profile: CapabilityProfile, selectedSkills: string[]): string[] {
+  if (profile.needsCIDiagnosis) {
+    return mergeSkillPolicy(selectedSkills, ["debugging_skill", "coding_skill", "research_skill"]);
+  }
+  if (profile.needsCode) {
+    return mergeSkillPolicy(selectedSkills, ["coding_skill", "debugging_skill", "research_skill"]);
+  }
+  return intersectOrFallback(selectedSkills, ["paper_analysis_skill", "research_skill"]);
+}
+
+function skillsForAnalysis(profile: CapabilityProfile, selectedSkills: string[]): string[] {
+  if (profile.needsRuntime || profile.needsDataset || profile.needsCode) {
+    return mergeSkillPolicy(selectedSkills, ["coding_skill", "research_skill"]);
+  }
+  return intersectOrFallback(selectedSkills, ["paper_analysis_skill", "research_skill"]);
+}
+
+function uniqueTools(tools: string[]): string[] {
+  return Array.from(new Set(tools));
 }
 
 function extractJSONObject(content: string): string {

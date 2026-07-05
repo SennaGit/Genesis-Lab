@@ -29,8 +29,11 @@ test("CLI init creates TypeScript runtime home files", async () => {
     const result = runGenesis(["init"], genesisHome);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Genesis Research Runtime initialized/);
+    assert.match(result.stdout, /skills:/);
     await readFile(path.join(genesisHome, "config.json"), "utf8");
     await readFile(path.join(genesisHome, "mcp.json"), "utf8");
+    await readFile(path.join(genesisHome, "skills", "research_skill", "skill.json"), "utf8");
+    await readFile(path.join(genesisHome, "skills", "research_skill", "prompt.md"), "utf8");
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
@@ -244,6 +247,7 @@ test("CLI doctor reports research runtime checks", async () => {
     assert.match(result.stdout, /github_role: capability_provider_only/);
     assert.match(result.stdout, /mcp_tools:/);
     assert.match(result.stdout, /skills:/);
+    assert.match(result.stdout, /skills_root:/);
     assert.match(result.stdout, /skill_issues:/);
     assert.match(result.stdout, /provider_status:/);
     assert.match(result.stdout, /provider_ready:/);

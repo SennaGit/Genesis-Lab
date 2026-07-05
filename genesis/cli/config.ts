@@ -2,7 +2,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_RUNTIME_CONFIG, normalizeRuntimeConfig } from "../models/model_router.ts";
-import type { ModelRole, RuntimeConfig } from "../types/research.ts";
+import { defaultSkillRoot, defaultSkills } from "../skills/registry.ts";
+import type { ModelRole, RuntimeConfig, Skill } from "../types/research.ts";
 
 export function genesisHome(): string {
   return process.env.GENESIS_HOME || path.join(os.homedir(), ".genesis");
@@ -16,9 +17,10 @@ export function mcpConfigPath(): string {
   return path.join(genesisHome(), "mcp.json");
 }
 
-export async function initGenesisHome(force = false): Promise<{ home: string; config: string; mcp: string; sessions: string }> {
+export async function initGenesisHome(force = false): Promise<{ home: string; config: string; mcp: string; sessions: string; skills: string }> {
   const home = genesisHome();
   const sessions = path.join(home, "sessions");
+  const skills = defaultSkillRoot();
   await fs.mkdir(sessions, { recursive: true });
   if (force || !(await exists(configPath()))) {
     await saveRuntimeConfig(DEFAULT_RUNTIME_CONFIG);
@@ -26,7 +28,29 @@ export async function initGenesisHome(force = false): Promise<{ home: string; co
   if (force || !(await exists(mcpConfigPath()))) {
     await fs.writeFile(mcpConfigPath(), JSON.stringify({ servers: [], tools: [] }, null, 2), "utf8");
   }
-  return { home, config: configPath(), mcp: mcpConfigPath(), sessions };
+  await scaffoldDefaultSkills(skills, force);
+  return { home, config: configPath(), mcp: mcpConfigPath(), sessions, skills };
+}
+
+async function scaffoldDefaultSkills(root: string, force: boolean): Promise<void> {
+  await fs.mkdir(root, { recursive: true });
+  for (const skill of defaultSkills()) {
+    const dir = path.join(root, skill.id);
+    const specPath = path.join(dir, "skill.json");
+    const promptPath = path.join(dir, "prompt.md");
+    await fs.mkdir(dir, { recursive: true });
+    if (force || !(await exists(specPath))) {
+      await fs.writeFile(specPath, JSON.stringify(skillJson(skill), null, 2), "utf8");
+    }
+    if (force || !(await exists(promptPath))) {
+      await fs.writeFile(promptPath, `${skill.system_prompt.trim()}\n`, "utf8");
+    }
+  }
+}
+
+function skillJson(skill: Skill): Omit<Skill, "system_prompt"> {
+  const { system_prompt: _systemPrompt, ...json } = skill;
+  return json;
 }
 
 export async function loadRuntimeConfig(): Promise<RuntimeConfig> {

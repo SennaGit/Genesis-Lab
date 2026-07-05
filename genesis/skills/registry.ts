@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { MCPTool, ModelRole, Skill } from "../types/research.ts";
 
@@ -163,8 +164,8 @@ function stringArray(value: unknown, fallback: string[] = []): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
 }
 
-function defaultSkillRoot(): string {
-  return process.env.GENESIS_SKILLS_DIR || path.join(process.cwd(), "skills");
+export function defaultSkillRoot(): string {
+  return process.env.GENESIS_SKILLS_DIR || path.join(process.env.GENESIS_HOME || path.join(os.homedir(), ".genesis"), "skills");
 }
 
 export function defaultSkills(): Skill[] {
@@ -173,7 +174,7 @@ export function defaultSkills(): Skill[] {
       id: "research_skill",
       name: "research_skill",
       description: "Plan and execute source-grounded scientific research with explicit evidence.",
-      triggers: ["research", "evidence", "hypothesis", "study", "literature", "研究", "证据", "假设"],
+      triggers: ["research", "evidence", "hypothesis", "study", "literature"],
       input_schema: { type: "object" },
       output_schema: { type: "object" },
       required_tools: ["literature.search", "browser.validate", "dataset.lookup"],
@@ -189,7 +190,7 @@ export function defaultSkills(): Skill[] {
       id: "paper_analysis_skill",
       name: "paper_analysis_skill",
       description: "Analyze papers, methods, claims, limitations, and citation support.",
-      triggers: ["paper", "citation", "doi", "pdf", "literature", "论文", "引用", "方法"],
+      triggers: ["paper", "citation", "doi", "pdf", "literature"],
       input_schema: { type: "object" },
       output_schema: { type: "object" },
       required_tools: ["literature.search", "browser.validate", "dataset.lookup"],
@@ -205,7 +206,7 @@ export function defaultSkills(): Skill[] {
       id: "coding_skill",
       name: "coding_skill",
       description: "Use code execution as a research instrument, not as automation workflow.",
-      triggers: ["code", "repo", "github", "experiment", "simulate", "python", "代码", "仓库", "实验"],
+      triggers: ["code", "repo", "github", "experiment", "simulate", "python"],
       input_schema: { type: "object" },
       output_schema: { type: "object" },
       required_tools: ["runtime.python", "github.code_understanding", "github.repo_exploration"],
@@ -221,7 +222,7 @@ export function defaultSkills(): Skill[] {
       id: "debugging_skill",
       name: "debugging_skill",
       description: "Diagnose failures as evidence for research hypotheses.",
-      triggers: ["debug", "failure", "ci", "bug", "trace", "调试", "失败"],
+      triggers: ["debug", "failure", "ci", "bug", "trace"],
       input_schema: { type: "object" },
       output_schema: { type: "object" },
       required_tools: ["github.ci_diagnosis", "github.code_understanding", "runtime.python"],

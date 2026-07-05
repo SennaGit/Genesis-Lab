@@ -95,14 +95,14 @@ export function loadMCPConfig(file = defaultMCPConfigPath()): MCPConfig {
 
 export function defaultMCPTools(): MCPTool[] {
   return [
-    mockTool("literature.search", "api"),
-    mockTool("browser.validate", "browser"),
-    mockTool("dataset.lookup", "dataset"),
+    literatureSearchTool(),
+    browserValidateTool(),
+    datasetLookupTool(),
     runtimePythonTool(),
-    mockTool("github.code_understanding", "api"),
-    mockTool("github.repo_exploration", "api"),
-    mockTool("github.ci_diagnosis", "api"),
-    mockTool("github.change_execution", "api")
+    githubCapabilityTool("github.code_understanding", "Code understanding"),
+    githubCapabilityTool("github.repo_exploration", "Repository exploration"),
+    githubCapabilityTool("github.ci_diagnosis", "CI diagnosis"),
+    githubCapabilityTool("github.change_execution", "Change execution")
   ];
 }
 
@@ -307,6 +307,188 @@ class JsonRpcStdio {
   }
 }
 
+function literatureSearchTool(): MCPTool {
+  return {
+    name: "literature.search",
+    type: "api",
+    input_schema: { type: "object" },
+    output_schema: { type: "object", properties: { evidence: { type: "array" } } },
+    execute: async (input: unknown) => {
+      const request = researchRequest(input);
+      const terms = searchTerms(request.topic);
+      return {
+        tool: "literature.search",
+        adapter: "local-research-index",
+        query: request.topic,
+        evidence: [{
+          snippet: `Offline literature grounding for "${request.topic}" should start from falsifiable claims, recent reviews, and primary sources matching: ${terms.join(", ")}.`,
+          sourceType: "literature",
+          sourceId: "genesis.local.literature",
+          locator: "local:literature.search",
+          confidence: 0.76,
+          licenseNote: "Local research guidance only; external papers must be verified before citation.",
+          metadata: {
+            search_terms: terms,
+            recommended_sources: ["arXiv", "PubMed", "Crossref", "Semantic Scholar"],
+            instruction: request.instruction,
+            dependency_evidence_count: request.dependencyEvidenceCount,
+            limitation: "No network lookup was performed by the default local tool."
+          }
+        }],
+        confidence: 0.76
+      };
+    }
+  };
+}
+
+function browserValidateTool(): MCPTool {
+  return {
+    name: "browser.validate",
+    type: "browser",
+    input_schema: { type: "object" },
+    output_schema: { type: "object", properties: { evidence: { type: "array" } } },
+    execute: async (input: unknown) => {
+      const request = researchRequest(input);
+      return {
+        tool: "browser.validate",
+        adapter: "local-validation-policy",
+        evidence: [{
+          snippet: `Validation checklist for "${request.topic}": compare independent sources, record retrieval dates, preserve URLs/DOIs, and flag unsupported claims as limitations.`,
+          sourceType: "browser",
+          sourceId: "genesis.local.validation",
+          locator: "local:browser.validate",
+          confidence: 0.74,
+          licenseNote: "Local validation guidance; source pages must be checked with a browser/MCP adapter for publication use.",
+          metadata: {
+            validation_steps: ["independent_source", "url_or_doi", "retrieval_date", "claim_to_evidence_mapping", "contradiction_check"],
+            instruction: request.instruction,
+            dependency_evidence_count: request.dependencyEvidenceCount
+          }
+        }],
+        confidence: 0.74
+      };
+    }
+  };
+}
+
+function datasetLookupTool(): MCPTool {
+  return {
+    name: "dataset.lookup",
+    type: "dataset",
+    input_schema: { type: "object" },
+    output_schema: { type: "object", properties: { evidence: { type: "array" } } },
+    execute: async (input: unknown) => {
+      const request = researchRequest(input);
+      const candidates = datasetCandidates(request.topic);
+      return {
+        tool: "dataset.lookup",
+        adapter: "local-dataset-catalog",
+        evidence: [{
+          snippet: `Dataset and experiment resources for "${request.topic}" should be selected by observability, license clarity, and reproducible access. Candidate classes: ${candidates.join(", ")}.`,
+          sourceType: "dataset",
+          sourceId: "genesis.local.dataset",
+          locator: "local:dataset.lookup",
+          confidence: 0.73,
+          licenseNote: "Dataset candidates require license and access verification before use.",
+          metadata: {
+            candidates,
+            selection_criteria: ["license", "version", "provenance", "sample_size", "reproducible_access"],
+            instruction: request.instruction,
+            dependency_evidence_count: request.dependencyEvidenceCount
+          }
+        }],
+        confidence: 0.73
+      };
+    }
+  };
+}
+
+type ResearchToolRequest = {
+  topic: string;
+  instruction: string;
+  dependencyEvidenceCount: number;
+};
+
+function researchRequest(input: unknown): ResearchToolRequest {
+  const record = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const topic = firstText(record.idea, record.goal, record.instruction, record.query, record.question) || "unspecified research topic";
+  const instruction = firstText(record.instruction, record.goal, record.idea) || topic;
+  const dependencies = Array.isArray(record.dependency_context) ? record.dependency_context : [];
+  const dependencyEvidenceCount = dependencies.reduce((sum, item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return sum;
+    }
+    const evidence = (item as Record<string, unknown>).evidence;
+    return sum + (Array.isArray(evidence) ? evidence.length : 0);
+  }, 0);
+  return { topic, instruction, dependencyEvidenceCount };
+}
+
+function firstText(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+    if (Array.isArray(value)) {
+      const joined = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).join(" ").trim();
+      if (joined) {
+        return joined;
+      }
+    }
+  }
+  return undefined;
+}
+
+function searchTerms(topic: string): string[] {
+  const terms = topic.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 3).slice(0, 6);
+  return terms.length ? terms : ["research", "evidence", "method"];
+}
+
+function datasetCandidates(topic: string): string[] {
+  const q = topic.toLowerCase();
+  if (/llm|language|model|memory|nlp/.test(q)) {
+    return ["model evaluation logs", "benchmark datasets", "ablation tables"];
+  }
+  if (/biology|clinical|medical|patient/.test(q)) {
+    return ["public biomedical registry", "cohort metadata", "supplementary tables"];
+  }
+  if (/code|repo|github|software|bug/.test(q)) {
+    return ["repository snapshots", "issue timelines", "CI traces"];
+  }
+  return ["public benchmark dataset", "simulation outputs", "curated source table"];
+}
+function githubCapabilityTool(name: string, label: string): MCPTool {
+  return {
+    name,
+    type: "api",
+    input_schema: { type: "object" },
+    output_schema: { type: "object", properties: { evidence: { type: "array" } } },
+    execute: async (input: unknown) => {
+      const request = researchRequest(input);
+      const writeCapability = name === "github.change_execution";
+      return {
+        tool: name,
+        adapter: "github-capability-boundary",
+        evidence: [{
+          snippet: `${label} capability prepared for "${request.topic}". Genesis treats GitHub as an evidence provider; attach a configured MCP/GitHub adapter to retrieve concrete repositories, diffs, issues, or logs.`,
+          sourceType: "github",
+          sourceId: name,
+          locator: `capability:${name}`,
+          confidence: writeCapability ? 0.52 : 0.72,
+          licenseNote: "GitHub-derived evidence must preserve repository license and source attribution.",
+          metadata: {
+            capability: name,
+            write_capability: writeCapability,
+            requires_explicit_adapter: true,
+            instruction: request.instruction,
+            dependency_evidence_count: request.dependencyEvidenceCount
+          }
+        }],
+        confidence: writeCapability ? 0.52 : 0.72
+      };
+    }
+  };
+}
 function runtimePythonTool(): MCPTool {
   return {
     name: "runtime.python",

@@ -4,7 +4,7 @@ import { GenesisRuntime } from "../core/runtime/agent_runtime.ts";
 import { MCPToolRegistry } from "../mcp/registry.ts";
 import { ModelRouter } from "../models/model_router.ts";
 import { SessionStore } from "../memory/session_store.ts";
-import { SkillRegistry } from "../skills/registry.ts";
+import { SkillRegistry, defaultSkillRoot } from "../skills/registry.ts";
 import type { RuntimeEvent, RuntimeSession } from "../types/research.ts";
 import { configPath, genesisHome, initGenesisHome, loadRuntimeConfig, mcpConfigPath, redactConfig, setRuntimeConfigValue, unsetRuntimeConfigValue } from "./config.ts";
 
@@ -64,6 +64,7 @@ async function handleInit(args: string[]): Promise<void> {
   console.log(`config: ${paths.config}`);
   console.log(`mcp: ${paths.mcp}`);
   console.log(`sessions: ${paths.sessions}`);
+  console.log(`skills: ${paths.skills}`);
 }
 
 async function handleRun(args: string[]): Promise<void> {
@@ -254,6 +255,7 @@ async function handleDoctor(): Promise<void> {
     ["synthesizer_model", router.modelFor("synthesizer")],
     ["mcp_tools", String(tools.list().length)],
     ["skills", String(skills.list().length)],
+    ["skills_root", defaultSkillRootSafe()],
     ["skill_issues", String(skills.audit(tools.list()).length)],
     ["sessions", store.sessionsRoot()],
     ["node", process.version],
@@ -264,6 +266,10 @@ async function handleDoctor(): Promise<void> {
   }
 }
 
+
+function defaultSkillRootSafe(): string {
+  return defaultSkillRoot();
+}
 function printRuntimeEvent(event: RuntimeEvent): void {
   if (event.type === "plan") {
     console.log(`event=plan session_id=${event.session_id} nodes=${event.graph.research_graph.length}`);

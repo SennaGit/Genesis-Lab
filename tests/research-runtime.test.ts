@@ -51,7 +51,7 @@ test("Critic triggers replanning with revision actions and persists evidence art
 
   try {
     const session = await runtime.run({ idea: "dataset experiment for weak evidence" });
-    assert.ok(session.graph.research_graph.some((node) => node.node_id === "replan-1"));
+    assert.ok(session.graph.research_graph.some((node) => node.node_id.startsWith("replan-1")));
     assert.equal(session.critic_rounds.length, 2);
     assert.equal(session.critic_rounds[0].passed, false);
     assert.equal(session.critic_rounds[0].status, "needs_revision");
@@ -208,6 +208,26 @@ test("MCP config can register external tool boundaries", async () => {
   assert.deepEqual(result.output, { evidence: "configured arxiv evidence", confidence: 0.8 });
 });
 
+test("Default research MCP tools return structured local evidence", async () => {
+  const registry = new MCPToolRegistry();
+  const inputs = { idea: "quantum memory stability in LLMs", instruction: "Collect source-grounded evidence." };
+  const expected = [
+    ["literature.search", "literature"],
+    ["browser.validate", "browser"],
+    ["dataset.lookup", "dataset"]
+  ] as const;
+
+  for (const [toolName, sourceType] of expected) {
+    const result = await registry.execute(toolName, inputs);
+    assert.equal(result.ok, true, result.error);
+    const output = result.output as { evidence?: Array<{ sourceType?: string; snippet?: string; metadata?: Record<string, unknown> }>; confidence?: number };
+    assert.equal(output.evidence?.[0]?.sourceType, sourceType);
+    assert.equal(typeof output.evidence?.[0]?.snippet, "string");
+    assert.doesNotMatch(output.evidence?.[0]?.snippet ?? "", /produced mock evidence/);
+    assert.equal(typeof output.confidence, "number");
+    assert.ok(output.evidence?.[0]?.metadata);
+  }
+});
 test("Runtime resume can continue an unfinished persisted session", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-resume-"));
   process.env.GENESIS_HOME = path.join(temp, ".genesis");
@@ -387,7 +407,7 @@ test("Runtime falls back to deterministic replan when model replan is invalid", 
     const session = await runtime.run({ idea });
 
     assert.equal(promptRoles.filter((role) => role === "replanner").length, 2);
-    assert.ok(session.graph.research_graph.some((node) => node.node_id === "replan-1"));
+    assert.ok(session.graph.research_graph.some((node) => node.node_id.startsWith("replan-1")));
     assert.equal(session.graph.research_graph.some((node) => node.node_id === "llm-replan-1"), false);
     assert.ok(session.model_usage?.some((call) => call.role === "critic"));
     assert.ok(session.model_usage?.some((call) => call.role === "synthesizer"));
@@ -747,3 +767,28 @@ function delayedRuntimeTool(delayMs: number, onActive?: (active: number) => void
     }
   };
 }
+
+test("Deterministic planner selects capabilities without GitHub workflow semantics", async () => {
+  const graph = deterministicResearchDAG("debug github ci failure with benchmark dataset and python simulation");
+  assertResearchDAG(graph);
+  const tools = graph.research_graph.flatMap((node) => node.tools_required);
+
+  assert.ok(tools.includes("github.repo_exploration"));
+  assert.ok(tools.includes("github.code_understanding"));
+  assert.ok(tools.includes("github.ci_diagnosis"));
+  assert.ok(tools.includes("dataset.lookup"));
+  assert.ok(tools.includes("runtime.python"));
+  assert.equal(tools.some((tool) => /workflow|bot|automation/i.test(tool)), false);
+});
+
+test("Default GitHub MCP capabilities return structured boundary evidence", async () => {
+  const registry = new MCPToolRegistry();
+  const result = await registry.execute("github.code_understanding", { idea: "inspect pull request diff as evidence" });
+
+  assert.equal(result.ok, true, result.error);
+  const output = result.output as { adapter?: string; evidence?: Array<{ sourceType?: string; metadata?: Record<string, unknown>; snippet?: string }> };
+  assert.equal(output.adapter, "github-capability-boundary");
+  assert.equal(output.evidence?.[0]?.sourceType, "github");
+  assert.equal(output.evidence?.[0]?.metadata?.requires_explicit_adapter, true);
+  assert.doesNotMatch(output.evidence?.[0]?.snippet ?? "", /produced mock evidence/);
+});
