@@ -77,12 +77,14 @@ test("CLI run does not write API keys to stdout or session artifacts", async () 
     assert.ok(sessionId);
     const sessionRoot = path.join(genesisHome, "sessions", sessionId);
     const files = [
+      "session.json",
       "graph.json",
       "execution_log.json",
       "critic_rounds.json",
       "graph_revisions.json",
       "report.md",
-      path.join("artifacts", "evidence_map.json")
+      path.join("artifacts", "evidence_map.json"),
+      path.join("artifacts", "manifest.json")
     ];
     for (const file of files) {
       const content = await readFile(path.join(sessionRoot, file), "utf8");
@@ -109,21 +111,30 @@ test("CLI run, status, report, and resume use persisted session files", async ()
     const sessionId = /session_id: (sess_[\w-]+)/.exec(result.stdout)?.[1];
     assert.ok(sessionId);
     const sessionRoot = path.join(genesisHome, "sessions", sessionId);
+    const metadata = JSON.parse(await readFile(path.join(sessionRoot, "session.json"), "utf8"));
     const graph = JSON.parse(await readFile(path.join(sessionRoot, "graph.json"), "utf8"));
     const log = JSON.parse(await readFile(path.join(sessionRoot, "execution_log.json"), "utf8"));
     const evidenceMap = JSON.parse(await readFile(path.join(sessionRoot, "artifacts", "evidence_map.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(path.join(sessionRoot, "artifacts", "manifest.json"), "utf8"));
     const report = await readFile(path.join(sessionRoot, "report.md"), "utf8");
+    assert.equal(metadata.status, "completed");
+    assert.equal(metadata.idea, "quantum memory stability in LLMs");
     assert.equal(graph.idea, "quantum memory stability in LLMs");
     assert.ok(log.length >= 4);
     assert.ok(Array.isArray(evidenceMap.n1));
+    assert.ok(Array.isArray(manifest.artifacts));
+    assert.ok(manifest.artifacts.some((artifact: { kind: string }) => artifact.kind === "report"));
     assert.match(report, /Evidence Map/);
     assert.match(report, /## Conclusion/);
 
     const status = runGenesis(["status", sessionId], genesisHome);
     assert.equal(status.status, 0, status.stderr);
     assert.match(status.stdout, /status: completed/);
+    assert.match(status.stdout, /session_metadata_path:/);
+    assert.match(status.stdout, /artifact_manifest_path:/);
     assert.match(status.stdout, /evidence_map_path:/);
     assert.match(status.stdout, /model_usage_path:/);
+    assert.match(status.stdout, /artifacts:/);
     assert.match(status.stdout, /model_calls:/);
 
     const reportCmd = runGenesis(["report", sessionId], genesisHome);

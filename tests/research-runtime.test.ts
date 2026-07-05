@@ -527,16 +527,17 @@ test("Runtime executes independent parallel DAG nodes in the same dependency wav
   try {
     await store.init();
     await store.createSession(sessionId, graph);
+    let maxActive = 0;
     const runtime = new GenesisRuntime({
       config: { thresholds: { confidence: 0.1, max_replans: 0 } },
-      tools: new MCPToolRegistry([delayedRuntimeTool(120)])
+      tools: new MCPToolRegistry([delayedRuntimeTool(120, (active) => {
+        maxActive = Math.max(maxActive, active);
+      })])
     });
-    const started = Date.now();
     const session = await runtime.resume(sessionId, { continue: true });
-    const elapsed = Date.now() - started;
 
     assert.deepEqual(session.executions.map((item) => item.node_id), ["p1", "p2", "p3"]);
-    assert.ok(elapsed < 220, `expected parallel execution under 220ms, got ${elapsed}ms`);
+    assert.equal(maxActive, 2);
   } finally {
     await rm(temp, { recursive: true, force: true });
     delete process.env.GENESIS_HOME;
@@ -727,15 +728,22 @@ function pythonToolFixture(): MCPTool {
   };
 }
 
-function delayedRuntimeTool(delayMs: number): MCPTool {
+function delayedRuntimeTool(delayMs: number, onActive?: (active: number) => void): MCPTool {
+  let active = 0;
   return {
     name: "runtime.python",
     type: "runtime",
     input_schema: { type: "object" },
     output_schema: { type: "object" },
     execute: async () => {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      return { evidence: "parallel runtime evidence", confidence: 0.9 };
+      active += 1;
+      onActive?.(active);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return { evidence: "parallel runtime evidence", confidence: 0.9 };
+      } finally {
+        active -= 1;
+      }
     }
   };
 }

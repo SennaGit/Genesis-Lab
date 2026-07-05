@@ -182,6 +182,34 @@ export type GraphRevision = {
   graph: ResearchDAG;
   created_at: string;
 };
+export type SessionStatus = "created" | "running" | "completed" | "failed";
+
+export type SessionMetadata = {
+  session_id: string;
+  idea: string;
+  goal: string;
+  status: SessionStatus;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+  node_count: number;
+  execution_count: number;
+  critic_round_count: number;
+  revision_count: number;
+  report_path?: string;
+  evidence_map_path?: string;
+  model_usage_path?: string;
+};
+
+export type ArtifactRecord = {
+  id: string;
+  kind: "graph" | "execution_log" | "critic_rounds" | "graph_revisions" | "model_usage" | "evidence_map" | "report";
+  path: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+};
+
 
 export type RuntimeSession = {
   session_id: string;
@@ -191,4 +219,6 @@ export type RuntimeSession = {
   report?: string;
   graph_revisions?: GraphRevision[];
   model_usage?: ModelCallTrace[];
+  metadata?: SessionMetadata;
+  artifacts?: ArtifactRecord[];
 };

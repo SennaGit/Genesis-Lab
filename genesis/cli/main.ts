@@ -122,6 +122,8 @@ async function handleStatus(args: string[]): Promise<void> {
   const store = new SessionStore();
   const session = await store.load(sessionId);
   printSessionSummary(session);
+  console.log(`session_metadata_path: ${store.paths(sessionId).metadata}`);
+  console.log(`artifact_manifest_path: ${store.paths(sessionId).manifest}`);
   console.log(`report_path: ${store.paths(sessionId).report}`);
   console.log(`evidence_map_path: ${store.paths(sessionId).evidenceMap}`);
   console.log(`model_usage_path: ${store.paths(sessionId).modelUsage}`);
@@ -281,12 +283,20 @@ function printRuntimeEvent(event: RuntimeEvent): void {
 function printSessionSummary(session: RuntimeSession): void {
   const finalReview = session.critic_rounds.at(-1);
   const modelUsage = session.model_usage ?? [];
+  const metadata = session.metadata;
   console.log(`session_id: ${session.session_id}`);
-  console.log(`status: ${session.report ? "completed" : "in_progress"}`);
+  console.log(`status: ${metadata?.status ?? (session.report ? "completed" : "in_progress")}`);
   console.log(`nodes: ${session.graph.research_graph.length}`);
   console.log(`executions: ${session.executions.length}`);
   console.log(`critic_status: ${finalReview?.status ?? "not_run"}`);
   console.log(`revisions: ${session.graph_revisions?.length ?? 0}`);
+  console.log(`artifacts: ${session.artifacts?.length ?? 0}`);
+  if (metadata?.created_at) {
+    console.log(`created_at: ${metadata.created_at}`);
+  }
+  if (metadata?.updated_at) {
+    console.log(`updated_at: ${metadata.updated_at}`);
+  }
   console.log(`model_calls: ${modelUsage.length}`);
   console.log(`total_tokens: ${totalTokens(modelUsage)}`);
 }
