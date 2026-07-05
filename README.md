@@ -100,7 +100,7 @@ Required built-in skills are available as directory assets and runtime defaults:
 
 ## MCP Tools
 
-`~/.genesis/mcp.json` can declare external tool boundaries. The runtime also registers default mock tools for local deterministic tests:
+`~/.genesis/mcp.json` can declare external tool boundaries. The runtime also registers default local tools for deterministic tests and offline research runs:
 
 - `literature.search`
 - `browser.validate`
@@ -110,6 +110,8 @@ Required built-in skills are available as directory assets and runtime defaults:
 - `github.repo_exploration`
 - `github.ci_diagnosis`
 - `github.change_execution`
+
+`runtime.python` executes only when a tool input includes a `code` string. It runs `python -I -c <code>` without a shell, enforces a 100-10000 ms timeout, truncates captured output, and stores stdout/stderr/exit code in structured evidence metadata. Set `GENESIS_PYTHON` to choose a different Python executable.
 
 GitHub tools are capabilities only; workflow/bot semantics are rejected.
 

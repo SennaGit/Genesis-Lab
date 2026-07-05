@@ -12,7 +12,7 @@ export class Executor {
     this.skills = skills;
   }
 
-  async executeNode(graph: ResearchDAG, node: ResearchDAGNode): Promise<NodeExecution> {
+  async executeNode(graph: ResearchDAG, node: ResearchDAGNode, completedExecutions: NodeExecution[] = []): Promise<NodeExecution> {
     const started = new Date().toISOString();
     const evidence: EvidenceItem[] = [];
     const confidences: number[] = [];
@@ -33,6 +33,7 @@ export class Executor {
           node_id: node.node_id,
           instruction: node.instruction,
           inputs: node.inputs,
+          dependency_context: dependencyContext(node, completedExecutions),
           skills_required: node.skills_required ?? []
         });
         const completed = new Date().toISOString();
@@ -84,6 +85,7 @@ export class Executor {
           instruction: node.instruction,
           outputs: node.outputs,
           evidence,
+          dependency_context: dependencyContext(node, completedExecutions),
           skills: activeSkills.map((skill) => skill.name)
         },
         evidence,
@@ -134,6 +136,28 @@ export class Executor {
   }
 }
 
+function dependencyContext(node: ResearchDAGNode, completedExecutions: NodeExecution[]): Array<{
+  node_id: string;
+  status: NodeExecution["status"];
+  confidence: number;
+  evidence: EvidenceItem[];
+  output?: unknown;
+}> {
+  const byNode = new Map(completedExecutions.map((execution) => [execution.node_id, execution]));
+  return node.depends_on.flatMap((dependency) => {
+    const execution = byNode.get(dependency);
+    if (!execution) {
+      return [];
+    }
+    return [{
+      node_id: execution.node_id,
+      status: execution.status,
+      confidence: execution.confidence,
+      evidence: execution.evidence,
+      output: execution.output
+    }];
+  });
+}
 function evidenceFromToolOutput(output: unknown, graph: ResearchDAG, node: ResearchDAGNode, tool: string, createdAt: string): EvidenceItem[] {
   const record = asRecord(output);
   const rawEvidence = record?.evidence ?? record?.structuredContent ?? record?.content;

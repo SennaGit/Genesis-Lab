@@ -5,12 +5,13 @@ import path from "node:path";
 import test from "node:test";
 import { GenesisRuntime } from "../genesis/core/runtime/agent_runtime.ts";
 import { Executor } from "../genesis/core/runtime/executor.ts";
+import { Critic } from "../genesis/core/runtime/critic.ts";
 import { deterministicResearchDAG, Planner } from "../genesis/core/runtime/planner.ts";
 import { ModelRouter } from "../genesis/models/model_router.ts";
 import { assertResearchDAG } from "../genesis/schemas/research_dag_schema.ts";
 import { MCPToolRegistry } from "../genesis/mcp/registry.ts";
 import { SessionStore } from "../genesis/memory/session_store.ts";
-import type { MCPTool, ResearchDAG } from "../genesis/types/research.ts";
+import type { MCPTool, NodeExecution, ResearchDAG } from "../genesis/types/research.ts";
 import { GITHUB_CAPABILITIES } from "../genesis/mcp/github_capabilities.ts";
 
 test("Planner outputs mandatory Research DAG schema with selected skills", async () => {
@@ -97,6 +98,99 @@ test("Executor enforces active skill tool policy", async () => {
   assert.match(execution.error ?? "", /disallowed/);
 });
 
+test("Executor passes dependency execution context to tools", async () => {
+  let capturedInput: Record<string, unknown> | undefined;
+  const graph: ResearchDAG = {
+    idea: "dependency context research",
+    goal: "Verify executor provides upstream evidence to downstream tools.",
+    research_graph: [
+      {
+        node_id: "ctx-1",
+        type: "question",
+        instruction: "Collect initial evidence.",
+        inputs: [],
+        outputs: ["initial_evidence"],
+        tools_required: [],
+        skills_required: ["research_skill"],
+        depends_on: [],
+        success_criteria: "Initial evidence exists."
+      },
+      {
+        node_id: "ctx-2",
+        type: "analysis",
+        instruction: "Use upstream evidence.",
+        inputs: ["initial_evidence"],
+        outputs: ["analysis"],
+        tools_required: ["browser.validate"],
+        skills_required: ["research_skill"],
+        depends_on: ["ctx-1"],
+        success_criteria: "Tool receives dependency context."
+      }
+    ],
+    execution_strategy: { mode: "sequential", replan_trigger: ["missing_evidence"] },
+    final_output_spec: { format: "report", sections: ["Findings", "Evidence Map"] }
+  };
+  const upstream: NodeExecution = {
+    node_id: "ctx-1",
+    status: "success",
+    evidence: [{
+      id: "ctx-1:evidence:1",
+      node_id: "ctx-1",
+      claimIds: ["ctx-1:initial_evidence"],
+      sourceType: "reasoning",
+      snippet: "upstream evidence",
+      confidence: 0.8,
+      created_at: new Date(0).toISOString()
+    }],
+    confidence: 0.8,
+    tool_trace: [],
+    output: { summary: "upstream output" }
+  };
+  const registry = new MCPToolRegistry([{
+    name: "browser.validate",
+    type: "browser",
+    input_schema: { type: "object" },
+    output_schema: { type: "object" },
+    execute: async (input: unknown) => {
+      capturedInput = input as Record<string, unknown>;
+      return { evidence: "validated with context", confidence: 0.88 };
+    }
+  }]);
+
+  const execution = await new Executor(registry).executeNode(graph, graph.research_graph[1], [upstream]);
+
+  assert.equal(execution.status, "success");
+  const context = capturedInput?.dependency_context as Array<{ node_id: string; evidence: Array<{ snippet: string }>; output: unknown }>;
+  assert.equal(context[0].node_id, "ctx-1");
+  assert.equal(context[0].evidence[0].snippet, "upstream evidence");
+  assert.deepEqual(context[0].output, { summary: "upstream output" });
+});
+
+test("Model critic can add structured revision actions", async () => {
+  const graph = deterministicResearchDAG("model critic missing evidence test");
+  const execution: NodeExecution = {
+    node_id: "n1",
+    status: "success",
+    evidence: [{
+      id: "n1:evidence:1",
+      node_id: "n1",
+      claimIds: ["n1:hypothesis"],
+      sourceType: "reasoning",
+      snippet: "hypothesis evidence",
+      confidence: 0.9,
+      created_at: new Date(0).toISOString()
+    }],
+    confidence: 0.9,
+    tool_trace: []
+  };
+
+  const finding = await new Critic(0.1, new StructuredCriticRouter()).evaluate(graph, [execution]);
+
+  assert.equal(finding.status, "needs_revision");
+  assert.ok(finding.reasons.includes("missing_evidence"));
+  assert.equal(finding.revisionActions[0].type, "add_evidence");
+  assert.equal(finding.revisionActions[0].node_id, "n2");
+});
 test("MCP config can register external tool boundaries", async () => {
   const registry = new MCPToolRegistry([], {
     tools: [
@@ -220,19 +314,20 @@ test("Runtime uses model-generated replan when provider returns a valid revised 
   process.env.GENESIS_HOME = path.join(temp, ".genesis");
   const originalFetch = globalThis.fetch;
   const idea = "llm replan research";
-  let calls = 0;
+  const promptRoles: string[] = [];
 
   try {
-    globalThis.fetch = (async () => {
-      calls += 1;
-      const graph = calls === 1 ? deterministicResearchDAG(idea) : llmReplannedGraph(idea);
-      return new Response(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify(graph) } }],
-        usage: { prompt_tokens: 10 + calls, completion_tokens: 5, total_tokens: 15 + calls }
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
+    globalThis.fetch = (async (_input: unknown, init?: { body?: unknown }) => {
+      const role = modelPromptRole(init);
+      promptRoles.push(role);
+      const content = role === "planner"
+        ? JSON.stringify(deterministicResearchDAG(idea))
+        : role === "replanner"
+          ? JSON.stringify(llmReplannedGraph(idea))
+          : role === "synthesizer"
+            ? validModelReport(idea)
+            : JSON.stringify(passedCriticResponse());
+      return openAIModelResponse(content, promptRoles.length);
     }) as typeof fetch;
 
     const runtime = new GenesisRuntime({
@@ -245,11 +340,14 @@ test("Runtime uses model-generated replan when provider returns a valid revised 
     });
     const session = await runtime.run({ idea });
 
-    assert.equal(calls, 2);
+    assert.ok(promptRoles.includes("planner"));
+    assert.equal(promptRoles.filter((role) => role === "replanner").length, 1);
+    assert.ok(promptRoles.includes("critic"));
+    assert.ok(promptRoles.includes("synthesizer"));
     assert.ok(session.graph.research_graph.some((node) => node.node_id === "llm-replan-1"));
     assert.equal(session.graph_revisions?.[0]?.graph.research_graph.some((node) => node.node_id === "llm-replan-1"), true);
-    assert.equal(session.model_usage?.length, 2);
-    assert.equal(session.model_usage?.[1].role, "planning");
+    assert.ok(session.model_usage?.some((call) => call.role === "critic"));
+    assert.ok(session.model_usage?.some((call) => call.role === "synthesizer"));
   } finally {
     globalThis.fetch = originalFetch;
     await rm(temp, { recursive: true, force: true });
@@ -262,19 +360,20 @@ test("Runtime falls back to deterministic replan when model replan is invalid", 
   process.env.GENESIS_HOME = path.join(temp, ".genesis");
   const originalFetch = globalThis.fetch;
   const idea = "invalid model replan fallback research";
-  let calls = 0;
+  const promptRoles: string[] = [];
 
   try {
-    globalThis.fetch = (async () => {
-      calls += 1;
-      const content = calls === 1 ? JSON.stringify(deterministicResearchDAG(idea)) : "not json";
-      return new Response(JSON.stringify({
-        choices: [{ message: { content } }],
-        usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 }
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
+    globalThis.fetch = (async (_input: unknown, init?: { body?: unknown }) => {
+      const role = modelPromptRole(init);
+      promptRoles.push(role);
+      const content = role === "planner"
+        ? JSON.stringify(deterministicResearchDAG(idea))
+        : role === "replanner"
+          ? "not json"
+          : role === "synthesizer"
+            ? validModelReport(idea)
+            : JSON.stringify(passedCriticResponse());
+      return openAIModelResponse(content, promptRoles.length);
     }) as typeof fetch;
 
     const runtime = new GenesisRuntime({
@@ -287,10 +386,11 @@ test("Runtime falls back to deterministic replan when model replan is invalid", 
     });
     const session = await runtime.run({ idea });
 
-    assert.equal(calls, 3);
+    assert.equal(promptRoles.filter((role) => role === "replanner").length, 2);
     assert.ok(session.graph.research_graph.some((node) => node.node_id === "replan-1"));
     assert.equal(session.graph.research_graph.some((node) => node.node_id === "llm-replan-1"), false);
-    assert.equal(session.model_usage?.length, 3);
+    assert.ok(session.model_usage?.some((call) => call.role === "critic"));
+    assert.ok(session.model_usage?.some((call) => call.role === "synthesizer"));
   } finally {
     globalThis.fetch = originalFetch;
     await rm(temp, { recursive: true, force: true });
@@ -298,20 +398,22 @@ test("Runtime falls back to deterministic replan when model replan is invalid", 
   }
 });
 
-test("Runtime persists provider model usage from planner calls", async () => {
+test("Runtime persists provider model usage from runtime model calls", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-model-usage-"));
   process.env.GENESIS_HOME = path.join(temp, ".genesis");
   const originalFetch = globalThis.fetch;
   const idea = "provider usage research";
 
   try {
-    globalThis.fetch = (async () => new Response(JSON.stringify({
-      choices: [{ message: { content: JSON.stringify(deterministicResearchDAG(idea)) } }],
-      usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 }
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    })) as typeof fetch;
+    globalThis.fetch = (async (_input: unknown, init?: { body?: unknown }) => {
+      const role = modelPromptRole(init);
+      const content = role === "planner"
+        ? JSON.stringify(deterministicResearchDAG(idea))
+        : role === "synthesizer"
+          ? validModelReport(idea)
+          : JSON.stringify(passedCriticResponse());
+      return openAIModelResponse(content, 1);
+    }) as typeof fetch;
 
     const runtime = new GenesisRuntime({
       config: {
@@ -321,14 +423,14 @@ test("Runtime persists provider model usage from planner calls", async () => {
       }
     });
     const session = await runtime.run({ idea });
-    assert.equal(session.model_usage?.length, 1);
-    assert.equal(session.model_usage?.[0].role, "planning");
+    assert.ok(session.model_usage?.some((call) => call.role === "planning"));
+    assert.ok(session.model_usage?.some((call) => call.role === "critic"));
+    assert.ok(session.model_usage?.some((call) => call.role === "synthesizer"));
     assert.equal(session.model_usage?.[0].provider, "openai");
-    assert.equal(session.model_usage?.[0].usage?.total_tokens, 18);
 
     const store = new SessionStore();
     const usage = JSON.parse(await readFile(store.paths(session.session_id).modelUsage, "utf8"));
-    assert.equal(usage[0].usage.total_tokens, 18);
+    assert.ok(usage.length >= 3);
     assert.doesNotMatch(JSON.stringify(usage), /test-key/);
   } finally {
     globalThis.fetch = originalFetch;
@@ -336,7 +438,6 @@ test("Runtime persists provider model usage from planner calls", async () => {
     delete process.env.GENESIS_HOME;
   }
 });
-
 test("MCP stdio server tools are callable through configured server boundary", async () => {
   const registry = new MCPToolRegistry([], {
     servers: [
@@ -352,6 +453,48 @@ test("MCP stdio server tools are callable through configured server boundary", a
   const result = await registry.execute("fixture.echo", { text: "hello" });
   assert.equal(result.ok, true, result.error);
   assert.deepEqual((result.output as { structuredContent?: unknown }).structuredContent, { echoed: "hello", tool: "fixture.echo" });
+});
+
+test("runtime.python executes local Python code with structured evidence", async () => {
+  const registry = new MCPToolRegistry();
+  const result = await registry.execute("runtime.python", {
+    code: "import json\nprint(json.dumps({'answer': 42}))",
+    timeout_ms: 5000
+  });
+
+  assert.equal(result.ok, true, result.error);
+  const output = result.output as { stdout?: string; evidence?: Array<{ sourceType?: string; metadata?: Record<string, unknown> }> };
+  assert.match(output.stdout ?? "", /42/);
+  assert.equal(output.evidence?.[0]?.sourceType, "runtime");
+  assert.equal(output.evidence?.[0]?.metadata?.exit_code, 0);
+});
+
+test("Executor records runtime.python stdout as evidence metadata", async () => {
+  const graph: ResearchDAG = {
+    idea: "runtime python evidence test",
+    goal: "Verify local runtime evidence capture.",
+    research_graph: [
+      {
+        node_id: "py-1",
+        type: "experiment",
+        instruction: "Run a tiny deterministic Python calculation.",
+        inputs: [],
+        outputs: ["calculation"],
+        tools_required: ["runtime.python"],
+        skills_required: ["coding_skill"],
+        depends_on: [],
+        success_criteria: "Python stdout is captured as structured evidence."
+      }
+    ],
+    execution_strategy: { mode: "sequential", replan_trigger: ["tool_failure"] },
+    final_output_spec: { format: "experiment", sections: ["Findings", "Evidence Map"] }
+  };
+  const execution = await new Executor(new MCPToolRegistry([pythonToolFixture()])).executeNode(graph, graph.research_graph[0]);
+
+  assert.equal(execution.status, "success");
+  assert.equal(execution.evidence[0].sourceType, "runtime");
+  assert.match(String(execution.evidence[0].metadata?.stdout), /25/);
+  assert.equal(execution.tool_trace[0].ok, true);
 });
 
 test("Runtime executes independent parallel DAG nodes in the same dependency wave", async () => {
@@ -400,6 +543,36 @@ test("Runtime executes independent parallel DAG nodes in the same dependency wav
   }
 });
 
+class StructuredCriticRouter extends ModelRouter {
+  constructor() {
+    super({ provider: "openai", apiKey: "test-key" });
+  }
+
+  override async chat(): Promise<{ content: string }> {
+    return {
+      content: JSON.stringify({
+        status: "needs_revision",
+        issues: [{
+          id: "model-missing-evidence-n2",
+          kind: "missing_evidence",
+          severity: "error",
+          node_id: "n2",
+          message: "The evidence collection node needs an independent source."
+        }],
+        revisionActions: [{
+          id: "model-add-evidence-n2",
+          type: "add_evidence",
+          node_id: "n2",
+          instruction: "Collect an independent source for node n2.",
+          tools_required: ["literature.search", "browser.validate"],
+          skills_required: ["research_skill"]
+        }],
+        checkedClaims: ["n2:evidence"],
+        confidence: 0.4
+      })
+    };
+  }
+}
 class RepairingPlannerRouter extends ModelRouter {
   calls = 0;
 
@@ -442,6 +615,71 @@ function llmReplannedGraph(idea: string): ResearchDAG {
   };
 }
 
+function modelPromptRole(init?: { body?: unknown }): "planner" | "critic" | "replanner" | "synthesizer" | "unknown" {
+  const body = typeof init?.body === "string" ? JSON.parse(init.body) as { messages?: Array<{ content?: string }> } : {};
+  const system = body.messages?.[0]?.content ?? "";
+  if (system.includes("Genesis Replanner")) {
+    return "replanner";
+  }
+  if (system.includes("Genesis Planner")) {
+    return "planner";
+  }
+  if (system.includes("Genesis Critic")) {
+    return "critic";
+  }
+  if (system.includes("Genesis Synthesizer")) {
+    return "synthesizer";
+  }
+  return "unknown";
+}
+
+function openAIModelResponse(content: string, index: number): Response {
+  return new Response(JSON.stringify({
+    choices: [{ message: { content } }],
+    usage: { prompt_tokens: 10 + index, completion_tokens: 5, total_tokens: 15 + index }
+  }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+function passedCriticResponse(): unknown {
+  return {
+    status: "passed",
+    issues: [],
+    revisionActions: [],
+    checkedClaims: [],
+    confidence: 0.95
+  };
+}
+
+function validModelReport(idea: string): string {
+  return [
+    "# Genesis Research Report",
+    "",
+    "## Research Plan",
+    `- Idea: ${idea}`,
+    "",
+    "## Findings",
+    "- Model synthesized findings from the provided evidence map.",
+    "",
+    "## Experiments",
+    "- Experiment requirements were inspected from the DAG.",
+    "",
+    "## Limitations",
+    "- Model report remains bounded by supplied evidence.",
+    "",
+    "## Conclusion",
+    "- The runtime produced a structured research report.",
+    "",
+    "## Evidence Map",
+    "- Evidence is linked in execution artifacts.",
+    "",
+    "## Artifacts",
+    "- report.md",
+    ""
+  ].join("\n");
+}
 function parallelNode(nodeId: string): ResearchDAG["research_graph"][number] {
   return {
     node_id: nodeId,
@@ -465,6 +703,27 @@ function failingLiteratureTool(): MCPTool {
     execute: async () => {
       throw new Error("fixture tool failed");
     }
+  };
+}
+
+function pythonToolFixture(): MCPTool {
+  return {
+    name: "runtime.python",
+    type: "runtime",
+    input_schema: { type: "object" },
+    output_schema: { type: "object" },
+    execute: async () => ({
+      evidence: [{
+        snippet: "Python completed in 1ms. stdout: 25",
+        sourceType: "runtime",
+        sourceId: "fixture-python",
+        confidence: 0.9,
+        metadata: { stdout: "25\n", exit_code: 0 }
+      }],
+      confidence: 0.9,
+      stdout: "25\n",
+      exit_code: 0
+    })
   };
 }
 

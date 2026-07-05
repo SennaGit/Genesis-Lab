@@ -29,7 +29,7 @@ export class GenesisRuntime {
   private readonly executor: Executor;
   private readonly critic: Critic;
   private readonly replanner: Replanner;
-  private readonly synthesizer = new Synthesizer();
+  private readonly synthesizer: Synthesizer;
 
   constructor(options: { config?: Partial<RuntimeConfig>; store?: SessionStore; tools?: MCPToolRegistry } = {}) {
     this.config = normalizeRuntimeConfig(options.config);
@@ -38,8 +38,9 @@ export class GenesisRuntime {
     this.store = options.store ?? new SessionStore();
     this.planner = new Planner(this.models, skills);
     this.executor = new Executor(options.tools ?? MCPToolRegistry.fromConfigFile(), skills);
-    this.critic = new Critic(this.config.thresholds.confidence);
+    this.critic = new Critic(this.config.thresholds.confidence, this.models);
     this.replanner = new Replanner(this.models);
+    this.synthesizer = new Synthesizer(this.models);
   }
 
   async run(input: RuntimeRunInput): Promise<RuntimeSession> {
@@ -85,7 +86,7 @@ export class GenesisRuntime {
     while (true) {
       await this.executePendingNodes(sessionId, graph, executions, onEvent);
 
-      const finding = this.critic.evaluate(graph, executions);
+      const finding = await this.critic.evaluate(graph, executions);
       criticRounds.push(finding);
       await this.store.appendCriticRound(sessionId, finding);
       onEvent?.({ type: "critic_result", session_id: sessionId, passed: finding.passed, status: finding.status, reasons: finding.reasons });
@@ -107,11 +108,11 @@ export class GenesisRuntime {
       await this.store.appendGraphRevision(sessionId, revision);
     }
 
-    const modelUsage = [...initialModelUsage, ...this.models.modelUsage()];
     await this.store.writeEvidenceMap(sessionId, executions);
-    await this.store.writeModelUsage(sessionId, modelUsage);
-    const report = this.synthesizer.synthesize(graph, executions, criticRounds);
+    const report = await this.synthesizer.synthesize(graph, executions, criticRounds);
     await this.store.writeReport(sessionId, report);
+    const modelUsage = [...initialModelUsage, ...this.models.modelUsage()];
+    await this.store.writeModelUsage(sessionId, modelUsage);
     onEvent?.({ type: "final_report", session_id: sessionId, report_path: this.store.paths(sessionId).report });
     return { session_id: sessionId, graph, executions, critic_rounds: criticRounds, report, graph_revisions: graphRevisions, model_usage: modelUsage };
   }
@@ -130,8 +131,8 @@ export class GenesisRuntime {
         onEvent?.({ type: "node_start", session_id: sessionId, node_id: node.node_id });
       }
       const results = graph.execution_strategy.mode === "parallel"
-        ? await Promise.all(batch.map((node) => this.executor.executeNode(graph, node)))
-        : await executeSequentially(batch, (node) => this.executor.executeNode(graph, node));
+        ? await Promise.all(batch.map((node) => this.executor.executeNode(graph, node, executions)))
+        : await executeSequentially(batch, (node) => this.executor.executeNode(graph, node, executions));
 
       for (let index = 0; index < batch.length; index += 1) {
         const node = batch[index];

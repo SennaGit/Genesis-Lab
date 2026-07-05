@@ -98,7 +98,7 @@ export function defaultMCPTools(): MCPTool[] {
     mockTool("literature.search", "api"),
     mockTool("browser.validate", "browser"),
     mockTool("dataset.lookup", "dataset"),
-    mockTool("runtime.python", "runtime"),
+    runtimePythonTool(),
     mockTool("github.code_understanding", "api"),
     mockTool("github.repo_exploration", "api"),
     mockTool("github.ci_diagnosis", "api"),
@@ -307,6 +307,172 @@ class JsonRpcStdio {
   }
 }
 
+function runtimePythonTool(): MCPTool {
+  return {
+    name: "runtime.python",
+    type: "runtime",
+    input_schema: {
+      type: "object",
+      properties: {
+        code: { type: "string" },
+        args: { type: "array", items: { type: "string" } },
+        timeout_ms: { type: "number" },
+        healthcheck: { type: "boolean" }
+      }
+    },
+    output_schema: {
+      type: "object",
+      properties: {
+        evidence: { type: "array" },
+        stdout: { type: "string" },
+        stderr: { type: "string" },
+        exit_code: { type: "number" },
+        timed_out: { type: "boolean" }
+      }
+    },
+    execute: async (input: unknown) => executeRuntimePython(input)
+  };
+}
+
+async function executeRuntimePython(input: unknown): Promise<unknown> {
+  const request = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  if (request.healthcheck === true || typeof request.code !== "string" || !request.code.trim()) {
+    return {
+      tool: "runtime.python",
+      adapter: "local-python",
+      evidence: [{
+        snippet: "runtime.python is registered; provide a code string to execute an isolated local Python process.",
+        sourceType: "runtime",
+        sourceId: pythonExecutable(),
+        confidence: 0.72,
+        licenseNote: "Local runtime output; verify reproducibility before publication use."
+      }],
+      confidence: 0.72,
+      executable: pythonExecutable(),
+      executed: false
+    };
+  }
+
+  const code = request.code.trim();
+  if (code.length > 20000) {
+    throw new Error("runtime.python code exceeds 20000 characters.");
+  }
+  const args = stringArray(request.args).slice(0, 32);
+  const timeoutMs = clampTimeout(request.timeout_ms);
+  const started = Date.now();
+  const result = await runPython(code, args, timeoutMs);
+  const durationMs = Date.now() - started;
+  const stdout = truncateOutput(result.stdout);
+  const stderr = truncateOutput(result.stderr);
+  const snippet = result.exitCode === 0
+    ? `Python completed in ${durationMs}ms. stdout: ${stdout || "<empty>"}`
+    : `Python failed with exit code ${result.exitCode ?? "null"}. stderr: ${stderr || "<empty>"}`;
+
+  return {
+    tool: "runtime.python",
+    adapter: "local-python",
+    evidence: [{
+      snippet,
+      sourceType: "runtime",
+      sourceId: pythonExecutable(),
+      confidence: result.exitCode === 0 ? 0.82 : 0.2,
+      locator: "python -I -c <code>",
+      licenseNote: "Local runtime output; verify reproducibility before publication use.",
+      metadata: {
+        stdout,
+        stderr,
+        exit_code: result.exitCode,
+        timed_out: result.timedOut,
+        duration_ms: durationMs
+      }
+    }],
+    confidence: result.exitCode === 0 ? 0.82 : 0.2,
+    stdout,
+    stderr,
+    exit_code: result.exitCode,
+    timed_out: result.timedOut,
+    duration_ms: durationMs,
+    executed: true
+  };
+}
+
+type PythonRunResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+};
+
+function runPython(code: string, args: string[], timeoutMs: number): Promise<PythonRunResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(pythonExecutable(), ["-I", "-c", code, ...args], {
+      windowsHide: true,
+      env: safePythonEnv()
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let settled = false;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (!child.killed) {
+        child.kill();
+      }
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.on("error", (error) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      }
+    });
+    child.on("exit", (code) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve({
+          stdout: Buffer.concat(stdout).toString("utf8"),
+          stderr: Buffer.concat(stderr).toString("utf8"),
+          exitCode: code,
+          timedOut
+        });
+      }
+    });
+  });
+}
+
+function pythonExecutable(): string {
+  return process.env.GENESIS_PYTHON || "python";
+}
+
+function safePythonEnv(): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH,
+    SYSTEMROOT: process.env.SYSTEMROOT,
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1"
+  };
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function clampTimeout(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 5000;
+  }
+  return Math.max(100, Math.min(Math.floor(value), 10000));
+}
+
+function truncateOutput(value: string): string {
+  return value.length > 8000 ? `${value.slice(0, 8000)}\n...<truncated>` : value;
+}
 function mockTool(name: string, type: MCPTool["type"]): MCPTool {
   return {
     name,
