@@ -124,6 +124,7 @@ async function handleStatus(args: string[]): Promise<void> {
   printSessionSummary(session);
   console.log(`report_path: ${store.paths(sessionId).report}`);
   console.log(`evidence_map_path: ${store.paths(sessionId).evidenceMap}`);
+  console.log(`model_usage_path: ${store.paths(sessionId).modelUsage}`);
 }
 
 async function handleReport(args: string[]): Promise<void> {
@@ -225,6 +226,7 @@ async function handleDoctor(): Promise<void> {
   const config = await loadRuntimeConfig();
   const tools = MCPToolRegistry.fromConfigFile(mcpConfigPath());
   const router = new ModelRouter(config);
+  const providerHealth = router.providerHealth();
   const store = new SessionStore();
   const skills = new SkillRegistry();
   const checks = [
@@ -232,6 +234,9 @@ async function handleDoctor(): Promise<void> {
     ["config", configPath()],
     ["mcp_config", mcpConfigPath()],
     ["provider", config.provider],
+    ["provider_status", providerHealth.status],
+    ["provider_ready", String(providerHealth.ok)],
+    ["provider_message", providerHealth.message],
     ["planning_model", router.modelFor("planning")],
     ["execution_model", router.modelFor("execution")],
     ["critic_model", router.modelFor("critic")],
@@ -265,12 +270,19 @@ function printRuntimeEvent(event: RuntimeEvent): void {
 
 function printSessionSummary(session: RuntimeSession): void {
   const finalReview = session.critic_rounds.at(-1);
+  const modelUsage = session.model_usage ?? [];
   console.log(`session_id: ${session.session_id}`);
   console.log(`status: ${session.report ? "completed" : "in_progress"}`);
   console.log(`nodes: ${session.graph.research_graph.length}`);
   console.log(`executions: ${session.executions.length}`);
   console.log(`critic_status: ${finalReview?.status ?? "not_run"}`);
   console.log(`revisions: ${session.graph_revisions?.length ?? 0}`);
+  console.log(`model_calls: ${modelUsage.length}`);
+  console.log(`total_tokens: ${totalTokens(modelUsage)}`);
+}
+
+function totalTokens(modelUsage: NonNullable<RuntimeSession["model_usage"]>): number {
+  return modelUsage.reduce((sum, call) => sum + (call.usage?.total_tokens ?? call.usage?.input_tokens ?? 0) + (call.usage?.total_tokens ? 0 : call.usage?.output_tokens ?? 0), 0);
 }
 
 function printHelp(): void {

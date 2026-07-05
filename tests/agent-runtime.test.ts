@@ -8,7 +8,7 @@ import { MockProvider } from "../providers/mock.ts";
 import { createDefaultToolRegistry } from "../tools/index.ts";
 import { setConfigValue, loadConfig } from "../providers/config.ts";
 
-test("agent loop 可以调用工具并返回中文观察", async () => {
+test("agent loop can call tools and return observations", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-agent-"));
   process.env.GENESIS_HOME = path.join(temp, ".genesis");
 
@@ -16,16 +16,16 @@ test("agent loop 可以调用工具并返回中文观察", async () => {
     const agent = new GenesisAgent(new MockProvider(), createDefaultToolRegistry(process.cwd()), {
       maxSteps: 4
     });
-    const result = await agent.run("列出当前目录文件");
+    const result = await agent.run("list current directory files");
 
     assert.equal(result.toolTrace[0]?.name, "list_files");
-    assert.match(result.output, /已根据工具观察完成任务/);
+    assert.match(result.output, /Completed the task using tool observations/);
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
 });
 
-test("配置系统写入 ~/.genesis/config.json 兼容用户自带 API Key", async () => {
+test("config system writes ~/.genesis/config.json with user API key", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-config-"));
   process.env.GENESIS_HOME = path.join(temp, ".genesis");
 
@@ -45,5 +45,3 @@ test("配置系统写入 ~/.genesis/config.json 兼容用户自带 API Key", asy
     await rm(temp, { recursive: true, force: true });
   }
 });
-
-

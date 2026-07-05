@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { CriticFinding, EvidenceItem, GraphRevision, NodeExecution, ResearchDAG, RuntimeSession, ToolExecutionTrace } from "../types/research.ts";
+import type { CriticFinding, EvidenceItem, GraphRevision, ModelCallTrace, NodeExecution, ResearchDAG, RuntimeSession, ToolExecutionTrace } from "../types/research.ts";
 
 export type SessionPaths = {
   root: string;
@@ -9,6 +9,7 @@ export type SessionPaths = {
   log: string;
   critic: string;
   revisions: string;
+  modelUsage: string;
   artifacts: string;
   evidenceMap: string;
   report: string;
@@ -38,6 +39,7 @@ export class SessionStore {
       log: path.join(root, "execution_log.json"),
       critic: path.join(root, "critic_rounds.json"),
       revisions: path.join(root, "graph_revisions.json"),
+      modelUsage: path.join(root, "model_usage.json"),
       artifacts,
       evidenceMap: path.join(artifacts, "evidence_map.json"),
       report: path.join(root, "report.md")
@@ -51,6 +53,7 @@ export class SessionStore {
     await fs.writeFile(paths.log, JSON.stringify([], null, 2), "utf8");
     await fs.writeFile(paths.critic, JSON.stringify([], null, 2), "utf8");
     await fs.writeFile(paths.revisions, JSON.stringify([], null, 2), "utf8");
+    await fs.writeFile(paths.modelUsage, JSON.stringify([], null, 2), "utf8");
     await fs.writeFile(paths.evidenceMap, JSON.stringify({}, null, 2), "utf8");
   }
 
@@ -76,6 +79,10 @@ export class SessionStore {
     await fs.writeFile(this.paths(sessionId).revisions, JSON.stringify(revisions, null, 2), "utf8");
   }
 
+  async writeModelUsage(sessionId: string, usage: ModelCallTrace[]): Promise<void> {
+    await fs.writeFile(this.paths(sessionId).modelUsage, JSON.stringify(usage, null, 2), "utf8");
+  }
+
   async writeEvidenceMap(sessionId: string, executions: NodeExecution[]): Promise<void> {
     const evidenceMap = Object.fromEntries(executions.map((execution) => [execution.node_id, execution.evidence]));
     await fs.mkdir(this.paths(sessionId).artifacts, { recursive: true });
@@ -92,8 +99,9 @@ export class SessionStore {
     const executions = await this.readExecutionLog(sessionId);
     const criticRounds = await this.readCriticRounds(sessionId);
     const graphRevisions = await this.readGraphRevisions(sessionId);
+    const modelUsage = await this.readModelUsage(sessionId);
     const report = await fs.readFile(paths.report, "utf8").catch(() => undefined);
-    return { session_id: sessionId, graph, executions, critic_rounds: criticRounds, report, graph_revisions: graphRevisions };
+    return { session_id: sessionId, graph, executions, critic_rounds: criticRounds, report, graph_revisions: graphRevisions, model_usage: modelUsage };
   }
 
   async readExecutionLog(sessionId: string): Promise<NodeExecution[]> {
@@ -116,6 +124,15 @@ export class SessionStore {
   async readGraphRevisions(sessionId: string): Promise<GraphRevision[]> {
     try {
       return JSON.parse(await fs.readFile(this.paths(sessionId).revisions, "utf8")) as GraphRevision[];
+    } catch {
+      return [];
+    }
+  }
+
+  async readModelUsage(sessionId: string): Promise<ModelCallTrace[]> {
+    try {
+      const raw = JSON.parse(await fs.readFile(this.paths(sessionId).modelUsage, "utf8")) as unknown[];
+      return Array.isArray(raw) ? raw.flatMap((item) => normalizeModelCallTrace(item)) : [];
     } catch {
       return [];
     }
@@ -206,4 +223,26 @@ function normalizeToolTrace(value: unknown): ToolExecutionTrace[] {
       error: typeof record.error === "string" ? record.error : undefined
     }];
   });
+}
+
+function normalizeModelCallTrace(value: unknown): ModelCallTrace[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.id !== "string" || typeof record.role !== "string" || typeof record.model !== "string") {
+    return [];
+  }
+  return [{
+    id: record.id,
+    role: record.role as ModelCallTrace["role"],
+    provider: record.provider as ModelCallTrace["provider"],
+    model: record.model,
+    started_at: typeof record.started_at === "string" ? record.started_at : new Date(0).toISOString(),
+    completed_at: typeof record.completed_at === "string" ? record.completed_at : new Date(0).toISOString(),
+    latency_ms: typeof record.latency_ms === "number" ? record.latency_ms : 0,
+    ok: record.ok === true,
+    usage: record.usage && typeof record.usage === "object" && !Array.isArray(record.usage) ? record.usage as ModelCallTrace["usage"] : undefined,
+    error: typeof record.error === "string" ? record.error : undefined
+  }];
 }

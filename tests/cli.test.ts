@@ -123,6 +123,8 @@ test("CLI run, status, report, and resume use persisted session files", async ()
     assert.equal(status.status, 0, status.stderr);
     assert.match(status.stdout, /status: completed/);
     assert.match(status.stdout, /evidence_map_path:/);
+    assert.match(status.stdout, /model_usage_path:/);
+    assert.match(status.stdout, /model_calls:/);
 
     const reportCmd = runGenesis(["report", sessionId], genesisHome);
     assert.equal(reportCmd.status, 0, reportCmd.stderr);
@@ -226,6 +228,8 @@ test("CLI doctor reports research runtime checks", async () => {
     assert.match(result.stdout, /github_role: capability_provider_only/);
     assert.match(result.stdout, /mcp_tools:/);
     assert.match(result.stdout, /skills:/);
+    assert.match(result.stdout, /provider_status:/);
+    assert.match(result.stdout, /provider_ready:/);
     assert.match(result.stdout, /synthesizer_model:/);
     assert.match(result.stdout, /node: v/);
   } finally {

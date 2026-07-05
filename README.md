@@ -45,6 +45,7 @@ Genesis stores runtime state under `~/.genesis` by default. Set `GENESIS_HOME` t
     execution_log.json
     critic_rounds.json
     graph_revisions.json
+    model_usage.json
     report.md
     artifacts/evidence_map.json
 ```
@@ -75,6 +76,8 @@ Genesis stores runtime state under `~/.genesis` by default. Set `GENESIS_HOME` t
 CLI output redacts API keys. Runtime logs and reports do not write API keys.
 
 Session evidence is stored as structured `EvidenceItem` objects with `claimIds`, source fields (`sourceUrl`, `sourceDoi`, `locator`), confidence, license notes, and per-tool execution traces. This keeps the report auditable while preserving compatibility with older execution logs during resume.
+
+Model calls are recorded in `model_usage.json` with provider, model role, latency, success status, and token usage when the provider returns it. `genesis doctor` reports provider configuration health without printing API keys.
 
 ## Skills
 

@@ -44,7 +44,14 @@ export class OpenAICompatibleProvider implements LLMProvider {
     const message = payload.choices?.[0]?.message;
     return {
       content: message?.content ?? "",
-      toolCalls: message?.tool_calls?.map(fromOpenAIToolCall)
+      toolCalls: message?.tool_calls?.map(fromOpenAIToolCall),
+      usage: payload.usage ? {
+        prompt_tokens: payload.usage.prompt_tokens,
+        completion_tokens: payload.usage.completion_tokens,
+        total_tokens: payload.usage.total_tokens,
+        cached_tokens: payload.usage.prompt_tokens_details?.cached_tokens,
+        reasoning_tokens: payload.usage.completion_tokens_details?.reasoning_tokens
+      } : undefined
     };
   }
 }
@@ -122,4 +129,15 @@ type OpenAIChatResponse = {
       tool_calls?: OpenAIToolCall[];
     };
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+    };
+    completion_tokens_details?: {
+      reasoning_tokens?: number;
+    };
+  };
 };

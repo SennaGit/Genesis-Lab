@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { CriticFinding, GraphRevision, NodeExecution, ResearchDAG, ResearchDAGNode, RuntimeConfig, RuntimeEvent, RuntimeSession } from "../../types/research.ts";
+import type { CriticFinding, GraphRevision, ModelCallTrace, NodeExecution, ResearchDAG, ResearchDAGNode, RuntimeConfig, RuntimeEvent, RuntimeSession } from "../../types/research.ts";
 import { ModelRouter, normalizeRuntimeConfig } from "../../models/model_router.ts";
 import { SessionStore } from "../../memory/session_store.ts";
 import { MCPToolRegistry } from "../../mcp/registry.ts";
@@ -24,6 +24,7 @@ export type RuntimeResumeOptions = {
 export class GenesisRuntime {
   private readonly config: RuntimeConfig;
   private readonly store: SessionStore;
+  private readonly models: ModelRouter;
   private readonly planner: Planner;
   private readonly executor: Executor;
   private readonly critic: Critic;
@@ -32,10 +33,10 @@ export class GenesisRuntime {
 
   constructor(options: { config?: Partial<RuntimeConfig>; store?: SessionStore; tools?: MCPToolRegistry } = {}) {
     this.config = normalizeRuntimeConfig(options.config);
-    const models = new ModelRouter(this.config);
+    this.models = new ModelRouter(this.config);
     const skills = new SkillRegistry();
     this.store = options.store ?? new SessionStore();
-    this.planner = new Planner(models, skills);
+    this.planner = new Planner(this.models, skills);
     this.executor = new Executor(options.tools ?? MCPToolRegistry.fromConfigFile(), skills);
     this.critic = new Critic(this.config.thresholds.confidence);
   }
@@ -46,7 +47,7 @@ export class GenesisRuntime {
     const graph = await this.planner.plan(input.idea);
     await this.store.createSession(sessionId, graph);
     input.onEvent?.({ type: "plan", session_id: sessionId, graph });
-    return this.executeLoop(sessionId, graph, [], [], [], input.onEvent);
+    return this.executeLoop(sessionId, graph, [], [], [], [], input.onEvent);
   }
 
   async resume(sessionId: string, options: RuntimeResumeOptions = {}): Promise<RuntimeSession> {
@@ -60,6 +61,7 @@ export class GenesisRuntime {
       [...session.executions],
       [...session.critic_rounds],
       [...(session.graph_revisions ?? [])],
+      [...(session.model_usage ?? [])],
       options.onEvent
     );
   }
@@ -70,6 +72,7 @@ export class GenesisRuntime {
     initialExecutions: NodeExecution[],
     initialCriticRounds: CriticFinding[],
     initialRevisions: GraphRevision[],
+    initialModelUsage: ModelCallTrace[],
     onEvent?: (event: RuntimeEvent) => void
   ): Promise<RuntimeSession> {
     let graph = initialGraph;
@@ -103,11 +106,13 @@ export class GenesisRuntime {
       await this.store.appendGraphRevision(sessionId, revision);
     }
 
+    const modelUsage = [...initialModelUsage, ...this.models.modelUsage()];
     await this.store.writeEvidenceMap(sessionId, executions);
+    await this.store.writeModelUsage(sessionId, modelUsage);
     const report = this.synthesizer.synthesize(graph, executions, criticRounds);
     await this.store.writeReport(sessionId, report);
     onEvent?.({ type: "final_report", session_id: sessionId, report_path: this.store.paths(sessionId).report });
-    return { session_id: sessionId, graph, executions, critic_rounds: criticRounds, report, graph_revisions: graphRevisions };
+    return { session_id: sessionId, graph, executions, critic_rounds: criticRounds, report, graph_revisions: graphRevisions, model_usage: modelUsage };
   }
 
   private async executePendingNodes(

@@ -215,6 +215,45 @@ test("Planner retries malformed model JSON and parses fenced repaired DAG", asyn
   assert.equal(graph.research_graph[0].skills_required?.[0], "research_skill");
 });
 
+test("Runtime persists provider model usage from planner calls", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-model-usage-"));
+  process.env.GENESIS_HOME = path.join(temp, ".genesis");
+  const originalFetch = globalThis.fetch;
+  const idea = "provider usage research";
+
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(deterministicResearchDAG(idea)) } }],
+      usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 }
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })) as typeof fetch;
+
+    const runtime = new GenesisRuntime({
+      config: {
+        provider: "openai",
+        apiKey: "test-key",
+        thresholds: { confidence: 0.1, max_replans: 0 }
+      }
+    });
+    const session = await runtime.run({ idea });
+    assert.equal(session.model_usage?.length, 1);
+    assert.equal(session.model_usage?.[0].role, "planning");
+    assert.equal(session.model_usage?.[0].provider, "openai");
+    assert.equal(session.model_usage?.[0].usage?.total_tokens, 18);
+
+    const store = new SessionStore();
+    const usage = JSON.parse(await readFile(store.paths(session.session_id).modelUsage, "utf8"));
+    assert.equal(usage[0].usage.total_tokens, 18);
+    assert.doesNotMatch(JSON.stringify(usage), /test-key/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(temp, { recursive: true, force: true });
+    delete process.env.GENESIS_HOME;
+  }
+});
+
 test("MCP stdio server tools are callable through configured server boundary", async () => {
   const registry = new MCPToolRegistry([], {
     servers: [

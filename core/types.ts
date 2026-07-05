@@ -40,9 +40,20 @@ export type ChatInput = {
   model?: string;
 };
 
+export type TokenUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  cached_tokens?: number;
+  reasoning_tokens?: number;
+};
+
 export type ChatOutput = {
   content: string;
   toolCalls?: ToolCall[];
+  usage?: TokenUsage;
 };
 
 export interface LLMClient {

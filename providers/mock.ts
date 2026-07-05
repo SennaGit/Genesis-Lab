@@ -11,27 +11,33 @@ export class MockProvider implements LLMProvider {
     if (!hasFreshObservation && input.tools?.length) {
       const toolCall = this.planMockToolCall(last?.content ?? "", input.tools.map((tool) => tool.name));
       if (toolCall) {
+        const content = "I will call a local tool first to collect verifiable observations.";
         return {
-          content: "我会先调用本地工具获取可验证观察结果。",
-          toolCalls: [toolCall]
+          content,
+          toolCalls: [toolCall],
+          usage: estimateUsage(input, content)
         };
       }
     }
 
     const observation = input.messages.filter((message) => message.role === "tool").at(-1)?.content;
     if (observation) {
+      const content = `Completed the task using tool observations.\n\nObservation:\n${observation}`;
       return {
-        content: `已根据工具观察完成任务。\n\n观察结果：\n${observation}`
+        content,
+        usage: estimateUsage(input, content)
       };
     }
 
+    const content = `Mock provider received: "${last?.content ?? ""}". Configure OpenAI, Anthropic, or a custom provider for real model reasoning.`;
     return {
-      content: `Mock provider 已收到指令：“${last?.content ?? ""}”。请配置 OpenAI、Anthropic 或 custom provider 以启用真实模型推理。`
+      content,
+      usage: estimateUsage(input, content)
     };
   }
 
   private planMockToolCall(input: string, toolNames: string[]): ToolCall | null {
-    if (toolNames.includes("list_files") && /列出|目录|files?|ls/i.test(input)) {
+    if (toolNames.includes("list_files") && /list|directory|files?|ls|列出|目录/i.test(input)) {
       return {
         id: createToolCallId(),
         name: "list_files",
@@ -39,7 +45,7 @@ export class MockProvider implements LLMProvider {
       };
     }
 
-    if (toolNames.includes("filesystem.read") && /README|读取|查看|read/i.test(input)) {
+    if (toolNames.includes("filesystem.read") && /README|read|查看|读取/i.test(input)) {
       return {
         id: createToolCallId(),
         name: "filesystem.read",
@@ -47,7 +53,7 @@ export class MockProvider implements LLMProvider {
       };
     }
 
-    if (toolNames.includes("read_file") && /README|读取|查看|read/i.test(input)) {
+    if (toolNames.includes("read_file") && /README|read|查看|读取/i.test(input)) {
       return {
         id: createToolCallId(),
         name: "read_file",
@@ -78,4 +84,15 @@ function lastMessage(messages: Message[]): Message | undefined {
 
 function createToolCallId(): string {
   return `mock-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function estimateUsage(input: ChatInput, output: string): ChatOutput["usage"] {
+  const promptChars = input.messages.reduce((sum, message) => sum + message.content.length, 0);
+  const promptTokens = Math.max(1, Math.ceil(promptChars / 4));
+  const completionTokens = Math.max(1, Math.ceil(output.length / 4));
+  return {
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: promptTokens + completionTokens
+  };
 }

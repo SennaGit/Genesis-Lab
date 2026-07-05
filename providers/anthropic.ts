@@ -42,7 +42,14 @@ export class AnthropicProvider implements LLMProvider {
 
     return {
       content: text,
-      toolCalls: toolCalls?.length ? toolCalls : undefined
+      toolCalls: toolCalls?.length ? toolCalls : undefined,
+      usage: payload.usage ? {
+        input_tokens: payload.usage.input_tokens,
+        output_tokens: payload.usage.output_tokens,
+        total_tokens: typeof payload.usage.input_tokens === "number" && typeof payload.usage.output_tokens === "number"
+          ? payload.usage.input_tokens + payload.usage.output_tokens
+          : undefined
+      } : undefined
     };
   }
 }
@@ -87,5 +94,9 @@ type AnthropicResponse = {
     name?: string;
     input?: unknown;
   }>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
 };
 

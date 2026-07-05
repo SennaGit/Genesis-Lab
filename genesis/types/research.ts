@@ -66,6 +66,29 @@ export type ToolExecutionTrace = {
   error?: string;
 };
 
+export type ModelUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  cached_tokens?: number;
+  reasoning_tokens?: number;
+};
+
+export type ModelCallTrace = {
+  id: string;
+  role: ModelRole;
+  provider: RuntimeConfig["provider"];
+  model: string;
+  started_at: string;
+  completed_at: string;
+  latency_ms: number;
+  ok: boolean;
+  usage?: ModelUsage;
+  error?: string;
+};
+
 export type SkillSpec = {
   id: string;
   name: string;
@@ -167,4 +190,5 @@ export type RuntimeSession = {
   critic_rounds: CriticFinding[];
   report?: string;
   graph_revisions?: GraphRevision[];
+  model_usage?: ModelCallTrace[];
 };
