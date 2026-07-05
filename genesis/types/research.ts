@@ -40,6 +40,32 @@ export type ToolSpec = MCPTool;
 
 export type ModelRole = "planning" | "execution" | "critic" | "synthesizer";
 
+export type EvidenceItem = {
+  id: string;
+  node_id: string;
+  claimIds: string[];
+  sourceType: string;
+  sourceId?: string;
+  sourceUrl?: string;
+  sourceDoi?: string;
+  locator?: string;
+  snippet: string;
+  confidence: number;
+  licenseNote?: string;
+  toolName?: string;
+  created_at: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type ToolExecutionTrace = {
+  tool: string;
+  ok: boolean;
+  started_at: string;
+  completed_at: string;
+  evidence_ids: string[];
+  error?: string;
+};
+
 export type SkillSpec = {
   id: string;
   name: string;
@@ -83,8 +109,9 @@ export type NodeExecution = {
   node_id: string;
   status: "pending" | "running" | "success" | "failed" | "skipped";
   output?: unknown;
-  evidence: string[];
+  evidence: EvidenceItem[];
   confidence: number;
+  tool_trace: ToolExecutionTrace[];
   error?: string;
   started_at?: string;
   completed_at?: string;

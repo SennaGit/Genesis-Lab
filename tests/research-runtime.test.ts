@@ -61,6 +61,10 @@ test("Critic triggers replanning with revision actions and persists evidence art
     const store = new SessionStore();
     const evidenceMap = JSON.parse(await readFile(store.paths(session.session_id).evidenceMap, "utf8"));
     assert.ok(Array.isArray(evidenceMap.n1));
+    assert.equal(evidenceMap.n1[0].sourceType, "reasoning");
+    assert.ok(Array.isArray(evidenceMap.n1[0].claimIds));
+    assert.equal(typeof evidenceMap.n2[0].snippet, "string");
+    assert.equal(evidenceMap.n2[0].sourceType, "literature");
     assert.match(session.report ?? "", /## Experiments/);
     assert.match(session.report ?? "", /## Artifacts/);
     assert.match(session.report ?? "", /## Conclusion/);
@@ -152,6 +156,54 @@ function lowConfidenceTools(): MCPTool[] {
   }));
 }
 
+
+test("MCP tool failure is persisted as tool trace", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-tool-failure-"));
+  process.env.GENESIS_HOME = path.join(temp, ".genesis");
+  const store = new SessionStore();
+  const sessionId = "sess_tool_failure_trace";
+  const graph: ResearchDAG = {
+    idea: "tool failure trace research",
+    goal: "Verify failed tools are auditable evidence gaps.",
+    research_graph: [
+      {
+        node_id: "fail-1",
+        type: "question",
+        instruction: "Call a failing literature tool.",
+        inputs: ["idea"],
+        outputs: ["evidence"],
+        tools_required: ["literature.search"],
+        skills_required: ["research_skill"],
+        depends_on: [],
+        success_criteria: "The failure is recorded rather than swallowed."
+      }
+    ],
+    execution_strategy: { mode: "sequential", replan_trigger: ["tool_failure"] },
+    final_output_spec: { format: "report", sections: ["Research Plan", "Findings", "Evidence Map"] }
+  };
+
+  try {
+    await store.init();
+    await store.createSession(sessionId, graph);
+    const runtime = new GenesisRuntime({
+      config: { thresholds: { confidence: 0.1, max_replans: 0 } },
+      tools: new MCPToolRegistry([failingLiteratureTool()])
+    });
+    const session = await runtime.resume(sessionId, { continue: true });
+    assert.equal(session.executions[0].status, "failed");
+    assert.equal(session.executions[0].tool_trace[0].tool, "literature.search");
+    assert.equal(session.executions[0].tool_trace[0].ok, false);
+    assert.match(session.executions[0].tool_trace[0].error ?? "", /fixture tool failed/);
+    assert.ok(session.critic_rounds[0].reasons.includes("tool_failure"));
+
+    const log = JSON.parse(await readFile(store.paths(sessionId).log, "utf8"));
+    assert.equal(log[0].tool_trace[0].ok, false);
+    assert.match(log[0].tool_trace[0].error, /fixture tool failed/);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+    delete process.env.GENESIS_HOME;
+  }
+});
 
 test("Planner retries malformed model JSON and parses fenced repaired DAG", async () => {
   const router = new RepairingPlannerRouter();
@@ -257,6 +309,18 @@ function parallelNode(nodeId: string): ResearchDAG["research_graph"][number] {
     skills_required: ["coding_skill"],
     depends_on: [],
     success_criteria: `${nodeId} completes.`
+  };
+}
+
+function failingLiteratureTool(): MCPTool {
+  return {
+    name: "literature.search",
+    type: "api",
+    input_schema: { type: "object" },
+    output_schema: { type: "object" },
+    execute: async () => {
+      throw new Error("fixture tool failed");
+    }
   };
 }
 

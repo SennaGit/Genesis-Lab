@@ -59,6 +59,40 @@ test("CLI config writes model routing and redacts API key", async () => {
   }
 });
 
+test("CLI run does not write API keys to stdout or session artifacts", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-ts-secret-"));
+  const genesisHome = path.join(temp, ".genesis");
+  const secret = "sk-test-never-write-this-key";
+
+  try {
+    const key = runGenesis(["config", "set", "api_key", secret], genesisHome);
+    assert.equal(key.status, 0, key.stderr);
+    assert.doesNotMatch(key.stdout, new RegExp(secret));
+
+    const result = runGenesis(["run", "api key secrecy regression research"], genesisHome);
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, new RegExp(secret));
+
+    const sessionId = /session_id: (sess_[\w-]+)/.exec(result.stdout)?.[1];
+    assert.ok(sessionId);
+    const sessionRoot = path.join(genesisHome, "sessions", sessionId);
+    const files = [
+      "graph.json",
+      "execution_log.json",
+      "critic_rounds.json",
+      "graph_revisions.json",
+      "report.md",
+      path.join("artifacts", "evidence_map.json")
+    ];
+    for (const file of files) {
+      const content = await readFile(path.join(sessionRoot, file), "utf8");
+      assert.doesNotMatch(content, new RegExp(secret), `${file} leaked API key`);
+    }
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
 test("CLI run, status, report, and resume use persisted session files", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-ts-run-"));
   const genesisHome = path.join(temp, ".genesis");

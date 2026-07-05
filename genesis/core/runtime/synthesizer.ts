@@ -1,9 +1,9 @@
-import type { CriticFinding, NodeExecution, ResearchDAG } from "../../types/research.ts";
+import type { CriticFinding, EvidenceItem, NodeExecution, ResearchDAG } from "../../types/research.ts";
 
 export class Synthesizer {
   synthesize(graph: ResearchDAG, executions: NodeExecution[], criticRounds: CriticFinding[]): string {
     const evidenceMap = executions
-      .map((item) => `- ${item.node_id}: ${item.evidence.length ? item.evidence.join("; ") : "no evidence"}`)
+      .map((item) => `- ${item.node_id}: ${formatEvidenceList(item.evidence)}`)
       .join("\n");
     const finalReview = criticRounds.at(-1);
     const limitations = criticRounds.flatMap((round) => round.issues.map((issue) => issue.message));
@@ -20,7 +20,7 @@ export class Synthesizer {
       `- Nodes: ${graph.research_graph.length}`,
       "",
       "## Findings",
-      ...executions.map((item) => `- ${item.node_id}: ${item.status}, confidence=${item.confidence.toFixed(2)}`),
+      ...executions.map((item) => `- ${item.node_id}: ${item.status}, confidence=${item.confidence.toFixed(2)}, evidence=${item.evidence.length}`),
       "",
       "## Experiments",
       experimentNodes.length ? experimentNodes.map((node) => `- ${node.node_id}: ${node.instruction}`).join("\n") : "- No executable experiment node was required for this run.",
@@ -43,3 +43,12 @@ export class Synthesizer {
   }
 }
 
+function formatEvidenceList(evidence: EvidenceItem[]): string {
+  if (!evidence.length) {
+    return "no evidence";
+  }
+  return evidence.map((item) => {
+    const locator = item.sourceUrl ? ` ${item.sourceUrl}` : item.sourceDoi ? ` doi:${item.sourceDoi}` : item.locator ? ` ${item.locator}` : "";
+    return `[${item.id}] ${item.snippet} (source=${item.sourceType}, confidence=${item.confidence.toFixed(2)}${locator})`;
+  }).join("; ");
+}

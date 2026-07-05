@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { CriticFinding, GraphRevision, NodeExecution, ResearchDAG, RuntimeSession } from "../types/research.ts";
+import type { CriticFinding, EvidenceItem, GraphRevision, NodeExecution, ResearchDAG, RuntimeSession, ToolExecutionTrace } from "../types/research.ts";
 
 export type SessionPaths = {
   root: string;
@@ -98,7 +98,8 @@ export class SessionStore {
 
   async readExecutionLog(sessionId: string): Promise<NodeExecution[]> {
     try {
-      return JSON.parse(await fs.readFile(this.paths(sessionId).log, "utf8")) as NodeExecution[];
+      const raw = JSON.parse(await fs.readFile(this.paths(sessionId).log, "utf8")) as unknown[];
+      return Array.isArray(raw) ? raw.map((item) => normalizeExecution(item)) : [];
     } catch {
       return [];
     }
@@ -119,4 +120,90 @@ export class SessionStore {
       return [];
     }
   }
+}
+
+function normalizeExecution(value: unknown): NodeExecution {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const nodeId = typeof record.node_id === "string" ? record.node_id : "unknown";
+  const confidence = typeof record.confidence === "number" ? record.confidence : 0;
+  return {
+    node_id: nodeId,
+    status: normalizeStatus(record.status),
+    output: record.output,
+    evidence: normalizeEvidenceArray(record.evidence, nodeId, confidence),
+    confidence,
+    tool_trace: normalizeToolTrace(record.tool_trace),
+    error: typeof record.error === "string" ? record.error : undefined,
+    started_at: typeof record.started_at === "string" ? record.started_at : undefined,
+    completed_at: typeof record.completed_at === "string" ? record.completed_at : undefined
+  };
+}
+
+function normalizeStatus(value: unknown): NodeExecution["status"] {
+  if (value === "pending" || value === "running" || value === "success" || value === "failed" || value === "skipped") {
+    return value;
+  }
+  return "failed";
+}
+
+function normalizeEvidenceArray(value: unknown, nodeId: string, confidence: number): EvidenceItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item, index) => normalizeEvidenceItem(item, nodeId, index, confidence));
+}
+
+function normalizeEvidenceItem(value: unknown, nodeId: string, index: number, fallbackConfidence: number): EvidenceItem {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    return {
+      id: typeof record.id === "string" ? record.id : `${nodeId}:evidence:${index + 1}`,
+      node_id: typeof record.node_id === "string" ? record.node_id : nodeId,
+      claimIds: Array.isArray(record.claimIds) && record.claimIds.every((item) => typeof item === "string") ? record.claimIds : [`${nodeId}:claim`],
+      sourceType: typeof record.sourceType === "string" ? record.sourceType : "legacy",
+      sourceId: typeof record.sourceId === "string" ? record.sourceId : undefined,
+      sourceUrl: typeof record.sourceUrl === "string" ? record.sourceUrl : undefined,
+      sourceDoi: typeof record.sourceDoi === "string" ? record.sourceDoi : undefined,
+      locator: typeof record.locator === "string" ? record.locator : undefined,
+      snippet: typeof record.snippet === "string" ? record.snippet : JSON.stringify(record),
+      confidence: typeof record.confidence === "number" ? record.confidence : fallbackConfidence,
+      licenseNote: typeof record.licenseNote === "string" ? record.licenseNote : undefined,
+      toolName: typeof record.toolName === "string" ? record.toolName : undefined,
+      created_at: typeof record.created_at === "string" ? record.created_at : new Date(0).toISOString(),
+      metadata: record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata) ? record.metadata as Record<string, unknown> : undefined
+    };
+  }
+  return {
+    id: `${nodeId}:legacy:${index + 1}`,
+    node_id: nodeId,
+    claimIds: [`${nodeId}:claim`],
+    sourceType: "legacy",
+    sourceId: "legacy.execution_log",
+    snippet: String(value),
+    confidence: fallbackConfidence,
+    created_at: new Date(0).toISOString()
+  };
+}
+
+function normalizeToolTrace(value: unknown): ToolExecutionTrace[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record.tool !== "string") {
+      return [];
+    }
+    return [{
+      tool: record.tool,
+      ok: record.ok === true,
+      started_at: typeof record.started_at === "string" ? record.started_at : new Date(0).toISOString(),
+      completed_at: typeof record.completed_at === "string" ? record.completed_at : new Date(0).toISOString(),
+      evidence_ids: Array.isArray(record.evidence_ids) && record.evidence_ids.every((id) => typeof id === "string") ? record.evidence_ids : [],
+      error: typeof record.error === "string" ? record.error : undefined
+    }];
+  });
 }

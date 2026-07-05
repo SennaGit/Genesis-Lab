@@ -132,8 +132,11 @@ export class GenesisRuntime {
         const execution = results[index];
         executions.push(execution);
         await this.store.appendExecution(sessionId, execution);
-        for (const tool of node.tools_required) {
-          onEvent?.({ type: "tool_result", session_id: sessionId, node_id: node.node_id, tool, ok: execution.status === "success" });
+        const traces = execution.tool_trace.length
+          ? execution.tool_trace
+          : node.tools_required.map((tool) => ({ tool, ok: execution.status === "success" }));
+        for (const trace of traces) {
+          onEvent?.({ type: "tool_result", session_id: sessionId, node_id: node.node_id, tool: trace.tool, ok: trace.ok });
         }
       }
     }

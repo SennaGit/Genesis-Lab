@@ -74,6 +74,8 @@ Genesis stores runtime state under `~/.genesis` by default. Set `GENESIS_HOME` t
 
 CLI output redacts API keys. Runtime logs and reports do not write API keys.
 
+Session evidence is stored as structured `EvidenceItem` objects with `claimIds`, source fields (`sourceUrl`, `sourceDoi`, `locator`), confidence, license notes, and per-tool execution traces. This keeps the report auditable while preserving compatibility with older execution logs during resume.
+
 ## Skills
 
 Skills are modular reasoning policies. The directory format is:
