@@ -164,6 +164,11 @@ test("CLI skills and MCP commands are TypeScript runtime commands", async () => 
     assert.equal(inspect.status, 0, inspect.stderr);
     assert.match(inspect.stdout, /runtime\.python/);
 
+    const audit = runGenesis(["skills", "audit"], genesisHome);
+    assert.equal(audit.status, 0, audit.stderr);
+    assert.match(audit.stdout, /issues: 0/);
+    assert.doesNotMatch(audit.stdout, /python\.sandbox|literature\.local_search/);
+
     const mcp = runGenesis(["mcp", "list"], genesisHome);
     assert.equal(mcp.status, 0, mcp.stderr);
     assert.match(mcp.stdout, /arxiv\.search/);
@@ -228,6 +233,7 @@ test("CLI doctor reports research runtime checks", async () => {
     assert.match(result.stdout, /github_role: capability_provider_only/);
     assert.match(result.stdout, /mcp_tools:/);
     assert.match(result.stdout, /skills:/);
+    assert.match(result.stdout, /skill_issues:/);
     assert.match(result.stdout, /provider_status:/);
     assert.match(result.stdout, /provider_ready:/);
     assert.match(result.stdout, /synthesizer_model:/);

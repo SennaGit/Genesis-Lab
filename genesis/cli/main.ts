@@ -153,6 +153,15 @@ async function handleSkills(args: string[]): Promise<void> {
     }
     return;
   }
+  if (subcommand === "audit") {
+    const tools = MCPToolRegistry.fromConfigFile(mcpConfigPath());
+    const issues = registry.audit(tools.list());
+    console.log(`issues: ${issues.length}`);
+    for (const issue of issues) {
+      console.log(`- ${issue.severity} ${issue.skill_id}: ${issue.message}`);
+    }
+    return;
+  }
   if (subcommand === "inspect") {
     if (!id) {
       throw new Error("Usage: genesis skills inspect <skill_id>");
@@ -160,7 +169,7 @@ async function handleSkills(args: string[]): Promise<void> {
     console.log(JSON.stringify(registry.get(id), null, 2));
     return;
   }
-  throw new Error("Usage: genesis skills list|inspect <skill_id>");
+  throw new Error("Usage: genesis skills list|inspect <skill_id>|audit");
 }
 
 async function handleMCP(args: string[]): Promise<void> {
@@ -243,6 +252,7 @@ async function handleDoctor(): Promise<void> {
     ["synthesizer_model", router.modelFor("synthesizer")],
     ["mcp_tools", String(tools.list().length)],
     ["skills", String(skills.list().length)],
+    ["skill_issues", String(skills.audit(tools.list()).length)],
     ["sessions", store.sessionsRoot()],
     ["node", process.version],
     ["github_role", "capability_provider_only"]
@@ -297,6 +307,7 @@ Usage:
   genesis report <session_id> [--path]
   genesis skills list
   genesis skills inspect <skill_id>
+  genesis skills audit
   genesis mcp list
   genesis mcp test <tool_name>
   genesis mcp test <server> <tool_name>

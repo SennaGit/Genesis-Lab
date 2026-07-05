@@ -1,6 +1,18 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import type { ModelRole, Skill } from "../types/research.ts";
+import type { MCPTool, ModelRole, Skill } from "../types/research.ts";
+
+export type SkillAuditIssue = {
+  skill_id: string;
+  severity: "warning" | "error";
+  message: string;
+};
+
+const LEGACY_TOOL_ALIASES: Record<string, string[]> = {
+  "python.sandbox": ["runtime.python"],
+  "literature.local_search": ["literature.search"],
+  "mcp.call": ["browser.validate"]
+};
 
 export class SkillRegistry {
   private readonly skills = new Map<string, Skill>();
@@ -33,6 +45,28 @@ export class SkillRegistry {
 
   list(): Skill[] {
     return Array.from(this.skills.values());
+  }
+
+  audit(availableTools: Iterable<string | MCPTool> = []): SkillAuditIssue[] {
+    const toolNames = new Set(Array.from(availableTools, (tool) => typeof tool === "string" ? tool : tool.name));
+    const issues: SkillAuditIssue[] = [];
+    for (const skill of this.list()) {
+      if (!skill.system_prompt.trim()) {
+        issues.push({ skill_id: skill.id, severity: "error", message: "system_prompt is empty." });
+      }
+      if (!skill.workflow.length) {
+        issues.push({ skill_id: skill.id, severity: "warning", message: "workflow is empty." });
+      }
+      for (const tool of [...skill.required_tools, ...skill.tool_policy.allowed_tools]) {
+        if (LEGACY_TOOL_ALIASES[tool]) {
+          issues.push({ skill_id: skill.id, severity: "error", message: `legacy tool alias remains: ${tool}` });
+        }
+        if (toolNames.size > 0 && !toolNames.has(tool) && !tool.endsWith(".*")) {
+          issues.push({ skill_id: skill.id, severity: "warning", message: `tool is not registered by default MCP registry: ${tool}` });
+        }
+      }
+    }
+    return issues;
   }
 
   selectForIdea(idea: string): Skill[] {
@@ -74,7 +108,7 @@ export function loadSkillsFromDirectory(root = defaultSkillRoot()): Skill[] {
 
 function normalizeSkillSpec(raw: Record<string, unknown>, prompt: string): Skill {
   const id = stringValue(raw.id, stringValue(raw.name, "unknown_skill")).replace(/\s+/g, "_");
-  const requiredTools = stringArray(raw.required_tools);
+  const requiredTools = canonicalToolList(stringArray(raw.required_tools));
   const workflow = stringArray(raw.workflow, stringArray(raw.triggers));
   return {
     id,
@@ -95,8 +129,8 @@ function normalizeToolPolicy(value: unknown, requiredTools: string[]): Skill["to
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const record = value as Record<string, unknown>;
     return {
-      allowed_tools: stringArray(record.allowed_tools, requiredTools),
-      disallowed_tools: stringArray(record.disallowed_tools)
+      allowed_tools: canonicalToolList(stringArray(record.allowed_tools, requiredTools)),
+      disallowed_tools: canonicalToolList(stringArray(record.disallowed_tools))
     };
   }
   return {
@@ -105,6 +139,9 @@ function normalizeToolPolicy(value: unknown, requiredTools: string[]): Skill["to
   };
 }
 
+function canonicalToolList(tools: string[]): string[] {
+  return Array.from(new Set(tools.flatMap((tool) => LEGACY_TOOL_ALIASES[tool] ?? [tool])));
+}
 function normalizeModelRole(value: string): ModelRole {
   if (value === "planner") {
     return "planning";
