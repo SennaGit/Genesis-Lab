@@ -1,4 +1,4 @@
-﻿import type { ResearchDAG, ResearchDAGNode } from "../../types/research.ts";
+import type { ResearchDAG, ResearchDAGNode } from "../../types/research.ts";
 import { assertResearchDAG } from "../../schemas/research_dag_schema.ts";
 import { ModelRouter } from "../../models/model_router.ts";
 import { SkillRegistry } from "../../skills/registry.ts";
@@ -27,27 +27,41 @@ export class Planner {
   }
 
   private async planWithModel(idea: string): Promise<ResearchDAG | undefined> {
-    try {
-      const selectedSkills = this.skills.selectForIdea(idea).map((skill) => skill.name).join(", ");
-      const response = await this.models.chat("planning", [
-        {
-          role: "system",
-          content: [
-            "You are Genesis Planner.",
-            "Return strict JSON only.",
-            "The JSON must match: idea, goal, research_graph[], execution_strategy, final_output_spec.",
-            "Each research_graph node may include skills_required using these selected policies: " + selectedSkills,
-            "Never design a GitHub bot or CI workflow. GitHub can only appear as a capability provider."
-          ].join("\n")
-        },
-        { role: "user", content: idea }
-      ]);
-      const parsed = JSON.parse(response.content);
-      assertResearchDAG(parsed);
-      return parsed;
-    } catch {
-      return undefined;
+    const selectedSkills = this.skills.selectForIdea(idea).map((skill) => skill.name).join(", ");
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      {
+        role: "system",
+        content: [
+          "You are Genesis Planner.",
+          "Return strict JSON only. Do not include markdown unless asked to repair malformed output.",
+          "The JSON must match: idea, goal, research_graph[], execution_strategy, final_output_spec.",
+          "Each research_graph node must use type hypothesis | question | experiment | analysis | synthesis.",
+          "Each research_graph node may include skills_required using these selected policies: " + selectedSkills,
+          "Use final_output_spec.sections exactly as a research report outline when possible.",
+          "Never design a GitHub bot or CI workflow. GitHub can only appear as a capability provider."
+        ].join("\n")
+      },
+      { role: "user", content: idea }
+    ];
+
+    let lastError = "";
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await this.models.chat("planning", messages);
+        return parseResearchDAG(response.content);
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        messages.push({
+          role: "assistant",
+          content: "The previous planner response was invalid and could not be used."
+        });
+        messages.push({
+          role: "user",
+          content: `Repair the plan. Return only valid JSON matching the mandatory ResearchDAG schema. Validation error: ${lastError}`
+        });
+      }
     }
+    return undefined;
   }
 
   private withSkillDefaults(graph: ResearchDAG, idea: string): ResearchDAG {
@@ -57,9 +71,19 @@ export class Planner {
       research_graph: graph.research_graph.map((node) => ({
         ...node,
         skills_required: node.skills_required?.length ? node.skills_required : defaultSkillsForNode(node, skillNames)
-      }))
+      })),
+      final_output_spec: {
+        ...graph.final_output_spec,
+        sections: graph.final_output_spec.sections.length ? graph.final_output_spec.sections : defaultReportSections()
+      }
     };
   }
+}
+
+export function parseResearchDAG(content: string): ResearchDAG {
+  const parsed = JSON.parse(extractJSONObject(content));
+  assertResearchDAG(parsed);
+  return parsed;
 }
 
 export function deterministicResearchDAG(idea: string, selectedSkills: string[] = ["research_skill"]): ResearchDAG {
@@ -125,9 +149,24 @@ export function deterministicResearchDAG(idea: string, selectedSkills: string[] 
     },
     final_output_spec: {
       format: "report",
-      sections: ["Research Plan", "Findings", "Evidence Map", "Limitations", "Next Steps"]
+      sections: defaultReportSections()
     }
   };
+}
+
+function extractJSONObject(content: string): string {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(content);
+  const candidate = fenced?.[1] ?? content;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    throw new Error("Planner response does not contain a JSON object.");
+  }
+  return candidate.slice(start, end + 1);
+}
+
+function defaultReportSections(): string[] {
+  return ["Research Plan", "Findings", "Experiments", "Limitations", "Conclusion", "Evidence Map", "Artifacts"];
 }
 
 function defaultSkillsForNode(node: ResearchDAGNode, selectedSkills: string[]): string[] {
@@ -151,4 +190,3 @@ function intersectOrFallback(selected: string[], preferred: string[]): string[] 
 function mergeSkillPolicy(selected: string[], required: string[]): string[] {
   return Array.from(new Set([...required, ...selected.filter((name) => required.includes(name))]));
 }
-

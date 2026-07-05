@@ -1,18 +1,18 @@
 export const philosophyItems = [
   {
-    title: "Auditable AI workflow",
+    title: "Research-first runtime",
     description:
-      "Every run keeps a visible chain from the original question to the task graph, evidence entries, computation output, review notes, and final artifact."
+      "Genesis starts from a user idea and builds a Research DAG, rather than treating repositories, issues, or CI as the product workflow."
   },
   {
-    title: "Modular research pipeline",
+    title: "Evidence before synthesis",
     description:
-      "Literature search, hypothesis framing, execution, validation, and artifact generation are separate modules that can be inspected or replaced."
+      "Planner, Executor, Critic, Replanner, and Synthesizer are separate responsibilities so claims remain traceable to evidence and review state."
   },
   {
-    title: "Human-in-the-loop reasoning system",
+    title: "User-owned providers",
     description:
-      "Researchers approve assumptions, inspect model behavior, correct intermediate claims, and decide when evidence is strong enough to publish."
+      "OpenAI, Anthropic, custom OpenAI-compatible, and local endpoints are configured by the user and routed by model role."
   }
 ];
 
@@ -20,55 +20,55 @@ export const architectureLayers = [
   {
     name: "CLI Layer",
     detail:
-      "Entry point for genesis run, genesis compile, genesis status, and genesis report commands."
+      "Entry point for genesis init, run, chat, resume, status, report, skills, mcp, config, and doctor commands."
   },
   {
-    name: "Agent Layer",
+    name: "Runtime Core",
     detail:
-      "Coordinates literature, code, synthesis, and review agents while preserving run state and evidence references."
+      "Runs Planner -> Research DAG -> Executor -> Critic -> Replanner -> Synthesizer with streaming events and session persistence."
   },
   {
-    name: "Research Engine",
+    name: "Research DAG",
     detail:
-      "Compiles questions into structured tasks, validates graph dependencies, and schedules the research DAG."
+      "Represents hypotheses, questions, experiments, analyses, and synthesis nodes with dependencies, tools, skills, and success criteria."
   },
   {
-    name: "Compute Layer",
+    name: "Skills and MCP",
     detail:
-      "Executes code, evaluates outputs, records logs, and connects computed results to validation checkpoints."
+      "Skills define reasoning policies; MCP and local tools provide external capabilities without owning the workflow."
   },
   {
-    name: "Artifact Builder",
+    name: "Memory and Artifacts",
     detail:
-      "Assembles reports, evidence ledgers, and exportable outputs that remain connected to the run history."
+      "Stores graph.json, execution_log.json, critic_rounds.json, graph_revisions.json, report.md, and artifacts/evidence_map.json per session."
   }
 ];
 
 export const workflowSteps = [
   {
-    name: "Literature",
+    name: "Plan",
     description:
-      "Collect source context and evidence candidates before the system forms a computational path."
+      "Convert the idea into a schema-checked Research DAG and select relevant skills and tools."
   },
   {
-    name: "Hypothesis",
+    name: "Execute",
     description:
-      "Convert the research question into testable assumptions, expected signals, and review checkpoints."
+      "Run DAG nodes through local tools, MCP servers, providers, or runtime capabilities while recording evidence."
   },
   {
-    name: "Compute",
+    name: "Critic",
     description:
-      "Run local code or tools against the planned task graph and preserve outputs as evidence items."
+      "Detect low confidence, missing evidence, contradictions, and tool failures, then produce revision actions."
   },
   {
-    name: "Validation",
+    name: "Replan",
     description:
-      "Compare results against assumptions, flag weak claims, and keep the researcher in control of acceptance."
+      "Append targeted DAG nodes from critic actions and re-execute within the configured refinement limit."
   },
   {
-    name: "Artifact",
+    name: "Synthesize",
     description:
-      "Generate a report or research package with traceable links back to the reasoning and computation."
+      "Write a structured report with research plan, findings, experiments, limitations, conclusion, evidence map, and artifacts."
   }
 ];
 
@@ -76,16 +76,16 @@ export const communityModel = [
   {
     title: "Contribution model",
     description:
-      "Contributions should preserve the research boundary between routing, content modules, reusable UI, agent runtime, and provider integrations."
+      "Contributions should preserve the boundary between CLI, runtime, skills, MCP providers, memory, and compatibility APIs."
   },
   {
     title: "Review culture",
     description:
-      "Changes are easiest to review when they include clear run behavior, evidence handling, failure modes, and focused tests."
+      "Changes are easiest to review when they include runtime behavior, evidence handling, failure modes, and focused tests."
   },
   {
     title: "Extension points",
     description:
-      "The project welcomes provider adapters, agent improvements, workflow visualizations, and artifact export paths."
+      "The project welcomes provider adapters, MCP servers, skill packs, DAG scheduling improvements, and artifact exporters."
   }
 ];

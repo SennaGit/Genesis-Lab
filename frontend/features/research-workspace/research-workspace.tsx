@@ -44,7 +44,7 @@ export function ResearchWorkspace() {
       setEvidence(evidenceData.items);
       setMarkdown(reportData.markdown);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "未知错误";
+      const message = error instanceof Error ? error.message : "Unknown runtime error";
       setRun({
         ...exampleRun,
         status: "error",
@@ -65,7 +65,7 @@ export function ResearchWorkspace() {
         </span>
         <div>
           <h1>Genesis Lab</h1>
-          <p>AI 科研工作流实验室</p>
+          <p>CLI Research Runtime OS</p>
         </div>
       </div>
 
@@ -74,18 +74,18 @@ export function ResearchWorkspace() {
         void startRun();
       }}>
         <label>
-          <span>研究问题</span>
+          <span>Research idea</span>
           <textarea
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            aria-label="研究问题"
+            aria-label="Research idea"
           />
         </label>
         <Button
           disabled={busy}
           fullWidth
           icon={<Play size={18} aria-hidden="true" />}
-          label={busy ? "运行中" : "启动研究流"}
+          label={busy ? "Running" : "Start research"}
           type="submit"
         />
       </form>
@@ -93,9 +93,9 @@ export function ResearchWorkspace() {
       <div className="sidebar-section-gap" />
 
       <Panel
-        action={<span className="progress-text">已完成 {completedCount}/{run.dag.length}</span>}
+        action={<span className="progress-text">Completed {completedCount}/{run.dag.length}</span>}
         icon={<Network size={18} aria-hidden="true" />}
-        title="DAG"
+        title="Research DAG"
       >
         <div className="dag-list">
           {run.dag.map((node) => (
@@ -110,10 +110,10 @@ export function ResearchWorkspace() {
     <>
       <div className="workspace-header">
         <div>
-          <h2>执行日志与报告</h2>
-          <p>状态：{run.status}</p>
+          <h2>Runtime log and report</h2>
+          <p>Status: {run.status}</p>
         </div>
-        <span className="status-pill">运行 {run.id}</span>
+        <span className="status-pill">Session {run.id}</span>
       </div>
 
       <Panel padded scroll>
@@ -124,28 +124,26 @@ export function ResearchWorkspace() {
         </div>
       </Panel>
 
-      <Panel icon={<FileText size={18} aria-hidden="true" />} title="Markdown 报告" scroll>
+      <Panel icon={<FileText size={18} aria-hidden="true" />} title="Markdown report" scroll>
         <pre className="report-text">
-          {markdown || "报告会在运行结束后显示。"}
+          {markdown || "The report appears after the runtime finishes synthesis."}
         </pre>
       </Panel>
     </>
   );
 
   const evidencePanel = (
-    <>
-      <Panel icon={<Search size={18} aria-hidden="true" />} title="证据面板" padded={false}>
-        {evidence.length === 0 ? (
-          <p className="empty-state">暂无证据。</p>
-        ) : (
-          <div className="evidence-list">
-            {evidence.map((item) => (
-              <EvidenceCard item={item} key={item.id} />
-            ))}
-          </div>
-        )}
-      </Panel>
-    </>
+    <Panel icon={<Search size={18} aria-hidden="true" />} title="Evidence map" padded={false}>
+      {evidence.length === 0 ? (
+        <p className="empty-state">No evidence recorded yet.</p>
+      ) : (
+        <div className="evidence-list">
+          {evidence.map((item) => (
+            <EvidenceCard item={item} key={item.id} />
+          ))}
+        </div>
+      )}
+    </Panel>
   );
 
   return <WorkspaceShell evidence={evidencePanel} main={main} sidebar={sidebar} />;

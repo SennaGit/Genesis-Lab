@@ -1,61 +1,64 @@
 import type { ResearchRun } from "@/types/research.types";
 
-export const initialQuestion = "为什么量子纠缠不违反相对论？";
+export const initialQuestion = "quantum memory stability in LLMs";
 
 export const exampleRun: ResearchRun = {
-  id: "preview",
+  id: "preview-session",
   question: initialQuestion,
   status: "idle",
   task: {
     question: initialQuestion,
-    domains: [],
-    subQuestions: [],
-    hypotheses: [],
-    methods: []
+    domains: ["research-runtime"],
+    subQuestions: [
+      { id: 1, text: "What hypothesis should be tested?", requires: [] },
+      { id: 2, text: "What evidence is needed?", requires: [1] }
+    ],
+    hypotheses: ["The idea can be decomposed into a bounded Research DAG."],
+    methods: ["Planner", "Executor", "Critic", "Replanner", "Synthesizer"]
   },
   dag: [
     {
-      id: "literature-1",
-      type: "literature_search",
+      id: "n1",
+      type: "hypothesis",
       status: "pending",
       requires: [],
-      agent: "LiteratureAgent",
+      agent: "Planner",
       outputs: {},
       attempts: 0,
       error: null
     },
     {
-      id: "analysis-1",
-      type: "python_analysis",
+      id: "n2",
+      type: "question",
       status: "pending",
-      requires: ["literature-1"],
-      agent: "CodeAgent",
+      requires: ["n1"],
+      agent: "Executor",
       outputs: {},
       attempts: 0,
       error: null
     },
     {
-      id: "synthesis-1",
-      type: "report_synthesis",
+      id: "n3",
+      type: "analysis",
       status: "pending",
-      requires: ["analysis-1"],
-      agent: "SynthesisAgent",
+      requires: ["n2"],
+      agent: "Critic",
       outputs: {},
       attempts: 0,
       error: null
     },
     {
-      id: "review-1",
-      type: "self_review",
+      id: "n4",
+      type: "synthesis",
       status: "pending",
-      requires: ["synthesis-1"],
-      agent: "ReviewAgent",
+      requires: ["n3"],
+      agent: "Synthesizer",
       outputs: {},
       attempts: 0,
       error: null
     }
   ],
-  logs: ["等待输入研究问题。"],
+  logs: ["Waiting for a research idea."],
   artifacts: [],
   report: null,
   createdAt: "",

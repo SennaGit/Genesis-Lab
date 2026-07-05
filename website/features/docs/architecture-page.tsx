@@ -8,9 +8,9 @@ export function ArchitecturePage() {
   return (
     <SectionShell
       className="min-h-[calc(100vh-4rem)]"
-      description="The system is organized as layered responsibilities so routing, agents, research planning, computation, and artifact generation can evolve independently."
+      description="The system is organized around CLI entry, Research DAG planning, tool execution, critic-driven replanning, and artifact persistence."
       eyebrow="Architecture"
-      title="A layered research system from command line to artifact."
+      title="A layered Research Runtime from command line to artifact."
     >
       <div className="relative grid gap-3">
         {architectureLayers.map((layer, index) => (

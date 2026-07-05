@@ -2,10 +2,10 @@ import type { SiteNavItem } from "@/ui/components/site-header";
 
 export const site = {
   brand: "Genesis Lab",
-  tagline: "AI Scientific Research Workbench",
+  tagline: "CLI Research Runtime OS",
   githubUrl: "https://github.com/SennaGit/Genesis-Lab",
   description:
-    "A research workbench for auditable AI workflows, modular scientific pipelines, local agent execution, and artifact generation."
+    "A CLI-first research runtime for Research DAG planning, tool execution, critic-driven replanning, and evidence-backed synthesis."
 };
 
 export const navItems: SiteNavItem[] = [
@@ -23,13 +23,13 @@ export const footerGroups = [
     items: [
       { label: "Architecture", href: "/architecture" },
       { label: "Research Workflow", href: "/workflow" },
-      { label: "API", href: "/api" }
+      { label: "CLI", href: "/cli" }
     ]
   },
   {
     title: "Build",
     items: [
-      { label: "CLI / Agent", href: "/cli" },
+      { label: "Skills and MCP", href: "/api" },
       { label: "Product Philosophy", href: "/philosophy" },
       { label: "Open Source", href: "/community" }
     ]

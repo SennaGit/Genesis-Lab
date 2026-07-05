@@ -2,45 +2,43 @@ import type { TerminalEntry } from "@/ui/components/terminal";
 
 export const cliCommands: TerminalEntry[] = [
   {
-    command: "genesis run \"why does quantum entanglement not violate relativity\"",
+    command: "genesis init",
+    response: ["Creates ~/.genesis/config.json, ~/.genesis/mcp.json, and the session store."]
+  },
+  {
+    command: "genesis run \"quantum memory stability in LLMs\"",
     response: [
-      "Runs the complete Genesis workflow, saves the run snapshot, records evidence, and writes a Markdown report."
+      "Streams plan, node_start, tool_result, critic_result, replan, and final_report events while persisting a session."
     ]
   },
   {
-    command: "genesis compile \"why does quantum entanglement not violate relativity\"",
-    response: [
-      "Compiles the question into a ResearchTask and DAG without executing the full workflow."
-    ]
+    command: "genesis status <session_id>",
+    response: ["Prints session status, DAG node count, execution count, critic state, report path, and evidence map path."]
   },
   {
-    command: "genesis status <runId>",
-    response: [
-      "Prints saved run status, question, timestamps, evidence count, report path, node states, and logs."
-    ]
+    command: "genesis report <session_id> --path",
+    response: ["Prints the Markdown report path; omit --path to print the report body."]
   },
   {
-    command: "genesis report <runId>",
-    response: [
-      "Prints the saved Markdown report for a completed run. Use genesis report <runId> --path for the file path."
-    ]
+    command: "genesis skills list && genesis mcp list",
+    response: ["Shows reasoning policies and configured MCP/local tools available to the Research Runtime."]
   }
 ];
 
 export const cliPanels = [
   {
-    title: "Run the workflow",
+    title: "Start a session",
     description:
-      "Use genesis run to execute the local research workflow and persist a traceable run record."
+      "Use genesis run to turn an idea into a persisted Research DAG with evidence and critic state."
   },
   {
-    title: "Compile before execution",
+    title: "Resume or inspect",
     description:
-      "Use genesis compile to inspect the generated research task and DAG before committing to execution."
+      "Use genesis resume, status, and report to continue unfinished work or inspect completed artifacts."
   },
   {
-    title: "Inspect saved outputs",
+    title: "Extend capabilities",
     description:
-      "Use genesis status and genesis report to review saved run state, logs, evidence count, and Markdown output."
+      "Use skills and MCP commands to inspect reasoning policies and tool providers without changing the runtime loop."
   }
 ];

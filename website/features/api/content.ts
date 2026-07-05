@@ -1,45 +1,45 @@
 export const restEndpoints = [
   {
-    method: "POST",
-    path: "/api/research/compile",
-    description: "Compile a natural-language research question into a structured research task."
+    method: "CLI",
+    path: "genesis run \"idea\"",
+    description: "Primary execution path for creating a Research DAG session and streaming runtime events."
   },
   {
-    method: "POST",
-    path: "/api/runs",
-    description: "Create a complete run that moves through planning, execution, evidence, and synthesis."
+    method: "CLI",
+    path: "genesis status <session_id>",
+    description: "Read session status, execution count, critic state, report path, and evidence map path."
   },
   {
-    method: "GET",
+    method: "CLI",
+    path: "genesis report <session_id>",
+    description: "Export the structured Markdown report from a completed session."
+  },
+  {
+    method: "CLI",
+    path: "genesis skills list | genesis mcp list",
+    description: "Inspect reasoning policies and capability providers used by the runtime."
+  },
+  {
+    method: "HTTP",
     path: "/api/runs/{runId}",
-    description: "Read run status, DAG nodes, logs, timestamps, and current execution state."
-  },
-  {
-    method: "GET",
-    path: "/api/runs/{runId}/evidence",
-    description: "Fetch evidence items produced by literature, code, synthesis, and review stages."
-  },
-  {
-    method: "GET",
-    path: "/api/runs/{runId}/report",
-    description: "Export the generated Markdown report for a completed or reviewed run."
+    description: "Compatibility API retained by the Python backend for existing workbench integrations."
   }
 ];
 
 export const apiCapabilities = [
   {
-    title: "Streaming",
+    title: "Streaming events",
     description:
-      "Run events can be streamed to clients so long-running research tasks show progress, logs, and agent milestones as they happen."
+      "CLI runs emit plan, node_start, tool_result, critic_result, replan, and final_report events."
   },
   {
-    title: "Tool calling",
+    title: "MCP tool boundary",
     description:
-      "Agents can call tools through a controlled interface while the runtime records the tool name, result, and evidence linkage."
+      "Local tools, configured mock tools, and stdio MCP server tools use one MCPTool interface."
   },
   {
-    title: "Plugin system",
+    title: "Model routing",
     description:
-      "Providers, tools, and artifact builders can be attached as plugins without coupling the research engine to one vendor or model."
+      "Planning, execution, critic, and synthesis roles can use different OpenAI, Anthropic, custom, or local models."
   }
 ];

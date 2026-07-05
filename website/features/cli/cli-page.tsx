@@ -10,9 +10,9 @@ export function CliPage() {
   return (
     <SectionShell
       className="min-h-[calc(100vh-4rem)]"
-      description="The command line surface exposes the currently available research runtime commands: genesis run, genesis compile, genesis status, and genesis report."
-      eyebrow="CLI / Agent"
-      title="Operate Genesis Lab from a terminal-first workflow."
+      description="The command line surface exposes the TypeScript Research Runtime: run, chat, resume, status, report, skills, mcp, config, and doctor."
+      eyebrow="CLI Runtime"
+      title="Operate Genesis Lab as a terminal-first research runtime."
     >
       <div className="grid gap-5" id="commands">
         <Terminal entries={cliCommands} title="Genesis CLI" />

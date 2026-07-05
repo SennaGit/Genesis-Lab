@@ -6,6 +6,7 @@ import test from "node:test";
 import { GenesisRuntime } from "../genesis/core/runtime/agent_runtime.ts";
 import { Executor } from "../genesis/core/runtime/executor.ts";
 import { deterministicResearchDAG, Planner } from "../genesis/core/runtime/planner.ts";
+import { ModelRouter } from "../genesis/models/model_router.ts";
 import { assertResearchDAG } from "../genesis/schemas/research_dag_schema.ts";
 import { MCPToolRegistry } from "../genesis/mcp/registry.ts";
 import { SessionStore } from "../genesis/memory/session_store.ts";
@@ -149,4 +150,125 @@ function lowConfidenceTools(): MCPTool[] {
     output_schema: { type: "object" },
     execute: async () => ({ evidence: `${name} weak evidence`, confidence: 0.2 })
   }));
+}
+
+
+test("Planner retries malformed model JSON and parses fenced repaired DAG", async () => {
+  const router = new RepairingPlannerRouter();
+  const graph = await new Planner(router).plan("structured retry planner test");
+
+  assert.equal(router.calls, 2);
+  assertResearchDAG(graph);
+  assert.equal(graph.idea, "structured retry planner test");
+  assert.equal(graph.research_graph[0].skills_required?.[0], "research_skill");
+});
+
+test("MCP stdio server tools are callable through configured server boundary", async () => {
+  const registry = new MCPToolRegistry([], {
+    servers: [
+      {
+        name: "fixture",
+        command: process.execPath,
+        args: [path.resolve("tests", "fixtures", "mcp_stdio_server.mjs")],
+        tools: [{ name: "fixture.echo", type: "api", timeout_ms: 5000 }]
+      }
+    ]
+  });
+
+  const result = await registry.execute("fixture.echo", { text: "hello" });
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual((result.output as { structuredContent?: unknown }).structuredContent, { echoed: "hello", tool: "fixture.echo" });
+});
+
+test("Runtime executes independent parallel DAG nodes in the same dependency wave", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-parallel-"));
+  process.env.GENESIS_HOME = path.join(temp, ".genesis");
+  const store = new SessionStore();
+  const sessionId = "sess_parallel_test";
+  const graph: ResearchDAG = {
+    idea: "parallel execution test",
+    goal: "Verify parallel DAG scheduling.",
+    research_graph: [
+      parallelNode("p1"),
+      parallelNode("p2"),
+      {
+        node_id: "p3",
+        type: "synthesis",
+        instruction: "Synthesize parallel outputs.",
+        inputs: ["a", "b"],
+        outputs: ["report"],
+        tools_required: [],
+        skills_required: ["research_skill"],
+        depends_on: ["p1", "p2"],
+        success_criteria: "Synthesis waits for both parallel branches."
+      }
+    ],
+    execution_strategy: { mode: "parallel", replan_trigger: ["tool_failure"] },
+    final_output_spec: { format: "report", sections: ["Research Plan", "Findings"] }
+  };
+
+  try {
+    await store.init();
+    await store.createSession(sessionId, graph);
+    const runtime = new GenesisRuntime({
+      config: { thresholds: { confidence: 0.1, max_replans: 0 } },
+      tools: new MCPToolRegistry([delayedRuntimeTool(120)])
+    });
+    const started = Date.now();
+    const session = await runtime.resume(sessionId, { continue: true });
+    const elapsed = Date.now() - started;
+
+    assert.deepEqual(session.executions.map((item) => item.node_id), ["p1", "p2", "p3"]);
+    assert.ok(elapsed < 220, `expected parallel execution under 220ms, got ${elapsed}ms`);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+    delete process.env.GENESIS_HOME;
+  }
+});
+
+class RepairingPlannerRouter extends ModelRouter {
+  calls = 0;
+
+  constructor() {
+    super({ provider: "openai", apiKey: "test-key" });
+  }
+
+  override async chat(): Promise<{ content: string }> {
+    this.calls += 1;
+    if (this.calls === 1) {
+      return { content: "not json" };
+    }
+    return {
+      content: `\`\`\`json
+${JSON.stringify(deterministicResearchDAG("structured retry planner test"))}
+\`\`\``
+    };
+  }
+}
+
+function parallelNode(nodeId: string): ResearchDAG["research_graph"][number] {
+  return {
+    node_id: nodeId,
+    type: "analysis",
+    instruction: `Run ${nodeId}.`,
+    inputs: [],
+    outputs: [nodeId],
+    tools_required: ["runtime.python"],
+    skills_required: ["coding_skill"],
+    depends_on: [],
+    success_criteria: `${nodeId} completes.`
+  };
+}
+
+function delayedRuntimeTool(delayMs: number): MCPTool {
+  return {
+    name: "runtime.python",
+    type: "runtime",
+    input_schema: { type: "object" },
+    output_schema: { type: "object" },
+    execute: async () => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return { evidence: "parallel runtime evidence", confidence: 0.9 };
+    }
+  };
 }

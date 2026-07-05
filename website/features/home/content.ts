@@ -1,44 +1,44 @@
 export const hero = {
   title: "Genesis Lab",
-  headline: "AI Scientific Research Workbench",
-  subtitle: "From Literature -> Computation -> Artifact"
+  headline: "CLI Research Runtime OS",
+  subtitle: "Planner -> Research DAG -> Executor -> Critic -> Replanner -> Synthesizer"
 };
 
 export const heroSignals = [
-  { label: "Evidence", value: "mapped" },
-  { label: "Agents", value: "local-first" },
-  { label: "Reports", value: "auditable" }
+  { label: "DAG", value: "research" },
+  { label: "Runtime", value: "CLI-first" },
+  { label: "Tools", value: "MCP-ready" }
 ];
 
 export const capabilityCards = [
   {
-    title: "Literature-aware planning",
+    title: "Idea-driven planning",
     description:
-      "Turn a research question into a structured task graph with traceable claims, assumptions, and evidence slots."
+      "Turn a research idea into a schema-checked Research DAG with hypotheses, questions, experiments, analysis, and synthesis nodes."
   },
   {
-    title: "Computation in the loop",
+    title: "Critic-driven refinement",
     description:
-      "Route hypotheses through code execution, validation checkpoints, and reproducible outputs before conclusions are written."
+      "Evaluate confidence, missing evidence, contradictions, and tool failures before replanning or writing final conclusions."
   },
   {
-    title: "Artifact-grade synthesis",
+    title: "Skills and MCP capabilities",
     description:
-      "Produce reports and research artifacts that preserve source context, agent decisions, and review notes."
+      "Route work through modular reasoning policies and local or stdio MCP tools while keeping GitHub as a capability provider only."
   }
 ];
 
 export const workbenchFrames = [
   {
-    title: "Research task",
-    body: "Compile natural-language questions into a DAG with literature, compute, synthesis, and review stages."
+    title: "Research DAG",
+    body: "Planner emits schema-checked nodes with dependencies, tools_required, skills_required, and success criteria."
   },
   {
-    title: "Evidence ledger",
-    body: "Attach findings to code output, literature fragments, review decisions, and generated artifacts."
+    title: "Session memory",
+    body: "Each session stores graph, execution log, critic rounds, graph revisions, report, and evidence map."
   },
   {
-    title: "Human checkpoint",
-    body: "Keep researchers in control of assumptions, model outputs, and final claims."
+    title: "Review loop",
+    body: "Critic produces issues and revision actions that can trigger bounded replanning before synthesis."
   }
 ];
