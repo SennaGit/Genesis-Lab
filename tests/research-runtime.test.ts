@@ -215,6 +215,89 @@ test("Planner retries malformed model JSON and parses fenced repaired DAG", asyn
   assert.equal(graph.research_graph[0].skills_required?.[0], "research_skill");
 });
 
+test("Runtime uses model-generated replan when provider returns a valid revised DAG", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-llm-replan-"));
+  process.env.GENESIS_HOME = path.join(temp, ".genesis");
+  const originalFetch = globalThis.fetch;
+  const idea = "llm replan research";
+  let calls = 0;
+
+  try {
+    globalThis.fetch = (async () => {
+      calls += 1;
+      const graph = calls === 1 ? deterministicResearchDAG(idea) : llmReplannedGraph(idea);
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify(graph) } }],
+        usage: { prompt_tokens: 10 + calls, completion_tokens: 5, total_tokens: 15 + calls }
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    const runtime = new GenesisRuntime({
+      config: {
+        provider: "openai",
+        apiKey: "test-key",
+        thresholds: { confidence: 0.9, max_replans: 1 }
+      },
+      tools: new MCPToolRegistry(lowConfidenceTools())
+    });
+    const session = await runtime.run({ idea });
+
+    assert.equal(calls, 2);
+    assert.ok(session.graph.research_graph.some((node) => node.node_id === "llm-replan-1"));
+    assert.equal(session.graph_revisions?.[0]?.graph.research_graph.some((node) => node.node_id === "llm-replan-1"), true);
+    assert.equal(session.model_usage?.length, 2);
+    assert.equal(session.model_usage?.[1].role, "planning");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(temp, { recursive: true, force: true });
+    delete process.env.GENESIS_HOME;
+  }
+});
+
+test("Runtime falls back to deterministic replan when model replan is invalid", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-replan-fallback-"));
+  process.env.GENESIS_HOME = path.join(temp, ".genesis");
+  const originalFetch = globalThis.fetch;
+  const idea = "invalid model replan fallback research";
+  let calls = 0;
+
+  try {
+    globalThis.fetch = (async () => {
+      calls += 1;
+      const content = calls === 1 ? JSON.stringify(deterministicResearchDAG(idea)) : "not json";
+      return new Response(JSON.stringify({
+        choices: [{ message: { content } }],
+        usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 }
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    const runtime = new GenesisRuntime({
+      config: {
+        provider: "openai",
+        apiKey: "test-key",
+        thresholds: { confidence: 0.9, max_replans: 1 }
+      },
+      tools: new MCPToolRegistry(lowConfidenceTools())
+    });
+    const session = await runtime.run({ idea });
+
+    assert.equal(calls, 3);
+    assert.ok(session.graph.research_graph.some((node) => node.node_id === "replan-1"));
+    assert.equal(session.graph.research_graph.some((node) => node.node_id === "llm-replan-1"), false);
+    assert.equal(session.model_usage?.length, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(temp, { recursive: true, force: true });
+    delete process.env.GENESIS_HOME;
+  }
+});
+
 test("Runtime persists provider model usage from planner calls", async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "genesis-runtime-model-usage-"));
   process.env.GENESIS_HOME = path.join(temp, ".genesis");
@@ -335,6 +418,28 @@ ${JSON.stringify(deterministicResearchDAG("structured retry planner test"))}
 \`\`\``
     };
   }
+}
+
+function llmReplannedGraph(idea: string): ResearchDAG {
+  const graph = deterministicResearchDAG(idea);
+  return {
+    ...graph,
+    research_graph: [
+      ...graph.research_graph,
+      {
+        node_id: "llm-replan-1",
+        type: "question",
+        instruction: "Collect an independent validation source requested by the critic.",
+        inputs: ["critic_findings", "n2"],
+        outputs: ["refined_evidence"],
+        tools_required: ["browser.validate"],
+        skills_required: ["research_skill"],
+        depends_on: graph.research_graph.map((node) => node.node_id),
+        success_criteria: "The critic issue is addressed with an independent evidence item."
+      }
+    ],
+    execution_strategy: { ...graph.execution_strategy, mode: "adaptive" }
+  };
 }
 
 function parallelNode(nodeId: string): ResearchDAG["research_graph"][number] {

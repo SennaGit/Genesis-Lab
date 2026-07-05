@@ -10,6 +10,8 @@ Genesis runs a research loop instead of a GitHub automation workflow:
 Planner -> Research DAG -> Executor -> Critic -> Replanner -> Synthesizer
 ```
 
+With non-mock providers, the Replanner asks the model for a complete revised Research DAG when the Critic requests revision. Invalid or unsafe replan output falls back to a deterministic recovery node so the runtime can continue without dropping prior graph nodes.
+
 GitHub is only a capability provider through MCP-style tools. It does not define the product workflow.
 
 ## CLI

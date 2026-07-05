@@ -28,7 +28,7 @@ export class GenesisRuntime {
   private readonly planner: Planner;
   private readonly executor: Executor;
   private readonly critic: Critic;
-  private readonly replanner = new Replanner();
+  private readonly replanner: Replanner;
   private readonly synthesizer = new Synthesizer();
 
   constructor(options: { config?: Partial<RuntimeConfig>; store?: SessionStore; tools?: MCPToolRegistry } = {}) {
@@ -39,6 +39,7 @@ export class GenesisRuntime {
     this.planner = new Planner(this.models, skills);
     this.executor = new Executor(options.tools ?? MCPToolRegistry.fromConfigFile(), skills);
     this.critic = new Critic(this.config.thresholds.confidence);
+    this.replanner = new Replanner(this.models);
   }
 
   async run(input: RuntimeRunInput): Promise<RuntimeSession> {
@@ -93,7 +94,7 @@ export class GenesisRuntime {
       }
       replanRound += 1;
       onEvent?.({ type: "replan", session_id: sessionId, round: replanRound, reasons: finding.reasons });
-      graph = this.replanner.replan(graph, finding, replanRound);
+      graph = await this.replanner.replan(graph, finding, replanRound);
       const revision: GraphRevision = {
         round: replanRound,
         reasons: finding.reasons,
